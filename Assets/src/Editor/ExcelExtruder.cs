@@ -195,7 +195,7 @@ namespace ExcelExtruder
     }
     public class DataModelGenerate
     {
-        protected virtual string staticdatamodel_path => "Assets/StaticData/StaticDataModel.cs";
+        protected virtual string staticdatamodel_path => Application.dataPath + "/StaticData/";
         protected virtual string bin_path => "StaticData/";
         protected virtual string config_path => "./excelconfig";
         private const string STATICDATAMODEL_CONST=
@@ -263,13 +263,14 @@ public class StaticDataModel
                     }
                     Progress(1, "ReadSheets", "End");
                 }
-                System.IO.File.WriteAllText(staticdatamodel_path, text);
+                if (!Directory.Exists(staticdatamodel_path)) Directory.CreateDirectory(staticdatamodel_path);
+                File.WriteAllText(staticdatamodel_path + "StaticDataModel.cs", text);
                 Progress(1, "GenerateStaticDataModel", "End");
             }
             catch (Exception e)
             {
                 EndProgress();
-                throw e;
+                Debug.LogException(e);
             }
         }
     }

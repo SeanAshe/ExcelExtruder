@@ -2,13 +2,5 @@
     "name": "com.sean.excel-extruder",
     "displayName": "Excel Extruder",
     "description": "Excel Extruder is a tool that allows you to extract data from Excel files and convert them into C# classes.",
-    "version": "1.0.0",
-    "unity": "2019.4",
-    "unityRelease": "25f1",
-    "dependencies": {
-      "com.cysharp.memorypack": "https://github.com/Cysharp/MemoryPack.git?path=src/MemoryPack.Unity/Assets/MemoryPack.Unity"
-    },
-    "_upm": {
-      "changelog": "Integration:\n\n- Add Excel Extruder Tool"
-    }
+    "version": "0.9.0"
   }

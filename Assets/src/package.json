@@ -2,5 +2,5 @@
     "name": "com.sean.excel-extruder",
     "displayName": "Excel Extruder",
     "description": "Excel Extruder is a tool that allows you to extract data from Excel files and convert them into C# classes.",
-    "version": "0.9.0"
+    "version": "1.0.0"
   }

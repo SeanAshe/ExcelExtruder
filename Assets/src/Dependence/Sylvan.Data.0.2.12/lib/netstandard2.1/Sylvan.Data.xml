@@ -1,0 +1,1237 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Sylvan.Data</name>
+    </assembly>
+    <members>
+        <member name="T:Sylvan.Data.IDataBinder">
+            <summary>
+            An interface that defines the ability to bind a DbDataReader to an object.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.IDataBinder.Bind(System.Data.Common.DbDataReader,System.Object)">
+            <summary>
+            Binds a data record to an object.
+            </summary>
+            <param name="record">The data reader.</param>
+            <param name="item">The item to bind to.</param>
+        </member>
+        <member name="T:Sylvan.Data.IDataBinder`1">
+            <summary>
+            An interface that defines the ability to bind a DbDataReader to an object.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.IDataBinder`1.Bind(System.Data.Common.DbDataReader,`0)">
+            <summary>
+            Binds a data record to an object.
+            </summary>
+            <param name="record">The data reader.</param>
+            <param name="item">The item to bind to.</param>
+        </member>
+        <member name="T:Sylvan.Data.DataBinder">
+            <summary>
+            Defines methods to create a general purpose data binder.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataBinder.Create``1(System.Collections.ObjectModel.ReadOnlyCollection{System.Data.Common.DbColumn},Sylvan.Data.DataBinderOptions)">
+            <summary>
+            Creates a data binder.
+            </summary>
+            <typeparam name="T">The type of record to bind to.</typeparam>
+            <param name="schema">The schema of incoming data.</param>
+            <param name="opts">The binding options.</param>
+            <returns>An IDataBinder{T} instance.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataBinder.Create``1(System.Data.IDataReader,Sylvan.Data.DataBinderOptions)">
+            <summary>
+            Creates a data binder.
+            </summary>
+            <typeparam name="T">The type of record to bind to.</typeparam>
+            <param name="reader">A data reader.</param>
+            <param name="opts">The binding options.</param>
+            <returns>An IDataBinder{T} instance.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataBinder.Create``1(System.Data.IDataReader,System.Collections.ObjectModel.ReadOnlyCollection{System.Data.Common.DbColumn},Sylvan.Data.DataBinderOptions)">
+            <summary>
+            Creates a data binder.
+            </summary>
+            <typeparam name="T">The type of record to bind to.</typeparam>
+            <param name="reader">A data reader.</param>
+            <param name="schema">The schema of the incoming data.</param>
+            <param name="opts">The binding options.</param>
+            <returns>An IDataBinder{T} instance.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataBinder.GetRecord``1(Sylvan.Data.IDataBinder{``0},System.Data.Common.DbDataReader)">
+            <summary>
+            Binds the current record to a new object instance.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataBinder.GetRecord``1(Sylvan.Data.IDataBinder{``0},System.Data.Common.DbDataReader,System.Func{System.Data.IDataRecord,``0,System.Exception,System.Boolean})">
+            <summary>
+            Binds the current record to a new object instance.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.InvalidEnumValueException">
+            <summary>
+            An exception thrown when a data binder encounters an invalid enum value.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.InvalidEnumValueException.Value">
+            <summary>
+            The invalid string value.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.InvalidEnumValueException.EnumType">
+            <summary>
+            The type of enum being bound.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.DataBinderException">
+            <summary>
+            A base type for exceptions thrown when binding data.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataBinderException.Ordinal">
+            <summary>
+            Gets the ordinal of the column that encountered an exception.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.UnboundMemberException">
+            <summary>
+            An exception thrown when a data binder encounters unbound columns or properties and is configured
+            to require them to be bound.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.UnboundMemberException.UnboundProperties">
+            <summary>
+            The names of the unbound properties.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.UnboundMemberException.UnboundColumns">
+            <summary>
+            The names of the unbound columns.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.DataBinderOptions">
+            <summary>
+            Options for configuring a data binder.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataBinderOptions.Culture">
+            <summary>
+            The culture to use when converting string values during binding.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataBinderOptions.BindingMode">
+            <summary>
+            Indicates how the data source will bind to the target type.
+            Defaults to <see cref="F:Sylvan.Data.DataBindingMode.AllProperties"/> which requires that
+            the datasource have column that binds to each property, but would allow unbound columns.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataBinderOptions.InferColumnTypeFromMember">
+            <summary>
+            Indicates that the target member type is used to indicate
+            how to access the data source. This can be used when
+            the data reader might not have a schema, and allows
+            accessing fields using multiple accessors.
+            </summary>
+            <remarks>
+            This is primarily to support the Sylvan CSV, which allows
+            accessing CSV (string) fields using any DbDataReader accessor.
+            </remarks>
+        </member>
+        <member name="M:Sylvan.Data.DataBinderOptions.#ctor">
+            <summary>
+            Creates a new DataBinderOptions instance.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.DataExtensions">
+            <summary>
+            Extension methods for DbDataReader.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.AsDbDataReader(System.Data.IDataReader)">
+            <summary>
+            Converts an IDataReader to a DbDataReader.
+            This conversion might be a no-op if the IDataReader is already
+            a DbDataReader, or it might adapt the reader using a wrapper.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.ToSchemaTable(System.Collections.ObjectModel.ReadOnlyCollection{System.Data.Common.DbColumn})">
+            <summary>
+            Creates a DataTable that specifies the schema.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.WithColumns(System.Data.Common.DbDataReader,Sylvan.Data.IDataColumn[])">
+            <summary>
+            Creates a DbDataReader by attaching additional columns to an existing DbDataReader.
+            </summary>
+            <param name="reader">The base data reader.</param>
+            <param name="columns">The extra columns to attach.</param>
+            <returns>A Db</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.GetRecords``1(System.Data.Common.DbDataReader)">
+            <summary>
+            Binds the DbDataReader data to produce a sequence of T.
+            </summary>
+            <typeparam name="T">The type of record to bind to.</typeparam>
+            <param name="reader">The data reader.</param>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.GetRecords``1(System.Data.Common.DbDataReader,Sylvan.Data.DataBinderOptions)">
+            <summary>
+            Binds the DbDataReader data to produce a sequence of T.
+            </summary>
+            <typeparam name="T">The type of record to bind to.</typeparam>
+            <param name="reader">The data reader.</param>
+            <param name="opts">The options to configure the data binder.</param>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.TakeWhile(System.Data.Common.DbDataReader,System.Func{System.Data.Common.DbDataReader,System.Boolean})">
+            <summary>
+            Creates a DbDataReader that reads until a certain condition is met.
+            </summary>
+            <param name="reader">The base DbDataReader</param>
+            <param name="predicate">The predicate, which once false will end the reader.</param>
+            <returns>A DbDataReader</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.GetRecordsAsync``1(System.Data.Common.DbDataReader)">
+            <summary>
+            Binds the DbDataReader data to produce a sequence of T.
+            </summary>
+            <typeparam name="T">The type of record to bind to.</typeparam>
+            <param name="reader">The data reader.</param>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.GetRecordsAsync``1(System.Data.Common.DbDataReader,Sylvan.Data.DataBinderOptions)">
+            <summary>
+            Binds the DbDataReader data to produce a sequence of T.
+            </summary>
+            <typeparam name="T">The type of record to bind to.</typeparam>
+            <param name="reader">The data reader.</param>
+            <param name="opts">The options to configure the data binder.</param>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.AsDataReader``1(System.Collections.Generic.IEnumerable{``0})">
+            <example>
+            var reader = seq.AsDataReader()
+            </example>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.AsDataReader``1(System.Collections.Generic.IAsyncEnumerable{``0},System.Threading.CancellationToken)">
+            <example>
+            var reader = seq.AsDataReader()
+            </example>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.Select(System.Data.Common.DbDataReader,System.Func{System.Data.Common.DbDataReader,System.Int32[]})">
+            <summary>
+            Selects a subset of columns for a DbDataReader.
+            </summary>
+            <param name="reader">The DbDataReader to select columns from.</param>
+            <param name="ordinalsSelector">A function to select the column ordinals.</param>
+            <returns>Returns a new DbDataReader containing just the selected columns.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.Select(System.Data.Common.DbDataReader,System.Int32[])">
+            <summary>
+            Selects a subset of columns for a DbDataReader.
+            </summary>
+            <param name="reader">The DbDataReader to select columns from.</param>
+            <param name="ordinals">A column ordinals to select.</param>
+            <returns>Returns a new DbDataReader containing just the selected columns.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.Select(System.Data.Common.DbDataReader,System.String[])">
+            <summary>
+            Selects a subset of columns for a DbDataReader.
+            </summary>
+            <param name="reader">The DbDataReader to select columns from.</param>
+            <param name="columnNames">The names of the columns to select.</param>
+            <returns>Returns a new DbDataReader containing just the selected columns.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.Where(System.Data.Common.DbDataReader,System.Func{System.Data.Common.DbDataReader,System.Boolean})">
+            <summary>
+            Applies a filter predicate to the rows of a DbDataReader.
+            </summary>
+            <param name="reader">A DbDataReader.</param>
+            <param name="predicate">A filter predicate to filter the rows.</param>
+            <returns>A new DbDataReader that produces the filtered rows.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.Take(System.Data.Common.DbDataReader,System.Int32)">
+            <summary>
+            Creates a DbDataReader that reads the first number of rows.
+            </summary>
+            <param name="reader">The base data reader.</param>
+            <param name="count">The maximum number of rows to read.</param>
+            <returns>A DbDataReader.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.Skip(System.Data.Common.DbDataReader,System.Int32)">
+            <summary>
+            Creates a DbDataReader that skips the first number of rows.
+            </summary>
+            <param name="reader">The base data reader.</param>
+            <param name="count">The number of rows to skip.</param>
+            <returns>A DbDataReader.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.AsVariableField``1(``0,System.Func{``0,System.Int32},System.Type)">
+            <summary>
+            Creates a DbDataReader where FieldCount can return different values for each row.
+            </summary>
+            <remarks>
+            Most DbDataReader implementations work on purely rectangular data. However, some implementations
+            might operate file formats that support variable fields. This allows accessing those extra columns
+            using the standard DbDataReader base type APIs only. 
+            Specifically, this is to support the Sylvan CSV and Excel data readers.
+            </remarks>
+            <param name="reader">A DbDataReader implementation.</param>
+            <param name="rowFieldCountAccessor">A function that returns the number of </param>
+            <param name="fieldType">Gets the type of the extra fields</param>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.ValidateSchema(System.Data.Common.DbDataReader,Sylvan.Data.DataValidationHandler)">
+            <summary>
+            Creates a DbDataReader that validates data against a schema as it reads.
+            </summary>
+            <param name="reader">A DbDataReader</param>
+            <param name="validationHandler">A DataValidationHandler callback.</param>
+            <returns>A DbDataReader.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataExtensions.Validate(System.Data.Common.DbDataReader,Sylvan.Data.DataValidationHandler)">
+            <summary>
+            Creates a DbDataReader that validates data against a schema as it reads.
+            The validationHandler method will be called for every row.
+            </summary>
+            <param name="reader">A DbDataReader</param>
+            <param name="validationHandler">A DataValidationHandler callback.</param>
+            <returns>A DbDataReader.</returns>
+        </member>
+        <member name="T:Sylvan.Data.DataReaderAdapter">
+            <summary>
+            A base class for DbDataReaders that wrap and modify other DbDataReaders.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.Reader">
+            <summary>
+            Gets the inner data reader.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.#ctor(System.Data.Common.DbDataReader)">
+            <summary>
+            Creates a new DataReaderAdapter.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.Item(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.Item(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.Depth">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.FieldCount">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.VisibleFieldCount">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.HasRows">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.IsClosed">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataReaderAdapter.RecordsAffected">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetBoolean(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetByte(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetBytes(System.Int32,System.Int64,System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetChar(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetChars(System.Int32,System.Int64,System.Char[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetDataTypeName(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetDateTime(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetDecimal(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetDouble(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetEnumerator">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetFieldType(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetFloat(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetGuid(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetInt16(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetInt32(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetInt64(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetName(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetOrdinal(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetString(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetValue(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.ReadAsync(System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.NextResultAsync(System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetStream(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetTextReader(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetValues(System.Object[])">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.IsDBNull(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.IsDBNullAsync(System.Int32,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetFieldValue``1(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetFieldValueAsync``1(System.Int32,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.Close">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.Dispose(System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.NextResult">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.Read">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetSchemaTable">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.DataReaderAdapter.GetColumnSchema">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.Data.DataSeriesColumn`1">
+            <summary>
+            A column in a <see cref="T:Sylvan.Data.DataSeriesAccessor`2"/>.
+            </summary>
+            <typeparam name="TK">The type of column key.</typeparam>
+        </member>
+        <member name="M:Sylvan.Data.DataSeriesColumn`1.#ctor(System.String,`0,System.Int32)">
+            <summary>
+            Constructs a new DataSeriesColumn.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesColumn`1.Name">
+            <summary>
+            The physical column name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesColumn`1.Key">
+            <summary>
+            The key value of the column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesColumn`1.Ordinal">
+            <summary>
+            The physical column ordinal.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.IDataSeriesRange`1">
+            <summary>
+            Allows access to the range and values of keys in a data series.
+            </summary>
+            <typeparam name="TK"></typeparam>
+        </member>
+        <member name="P:Sylvan.Data.IDataSeriesRange`1.Keys">
+            <summary>
+            Gets the keys of the series.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.IDataSeriesRange`1.Minimum">
+            <summary>
+            Gets the minimum key value.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.IDataSeriesRange`1.Maximum">
+            <summary>
+            Gets the maximum key value.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.DataSeriesAccessor`2">
+            <summary>
+            Reads a series of columns from a DbDataReader that all have the same type.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesAccessor`2.Keys">
+            <summary>
+            Gets an ordered list of the series column keys.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesAccessor`2.Minimum">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesAccessor`2.Maximum">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesAccessor`2.Count">
+            <summary>
+            Gets the number of elements in the series.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataSeriesAccessor`2.Item(System.Int32)">
+            <summary>
+            Gets the key at the given index.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataSeriesAccessor`2.#ctor(System.Collections.Generic.IEnumerable{Sylvan.Data.DataSeriesColumn{`0}})">
+            <summary>
+            Creates a new DataSeriesAccessor.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataSeriesAccessor`2.ReadValues(System.Data.Common.DbDataReader)">
+            <summary>
+            Reads the column values from the data record.
+            </summary>
+            <param name="record">The record to read the values from.</param>
+            <returns>The sequence of values ordered by corresponding series column key.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataSeriesAccessor`2.GetEnumerator">
+            <summary>
+            Enumerates the the keys in the series.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:Sylvan.Data.DbDataReaderStream">
+            <summary>
+            A Stream implementation over DbDataReader.GetBytes
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.DbDataReaderTextReader">
+            <summary>
+            A TextReader implementation over DbDataReader.GetChars
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.DataBindingMode">
+            <summary>
+            Specifies how columns are bound to properties.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.DataBindingMode.Any">
+            <summary>
+            Allows any combination of unbound properties and columns.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.DataBindingMode.AllProperties">
+            <summary>
+            Requires all properties be bound to a column.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.DataBindingMode.AllColumns">
+            <summary>
+            Requires all columns be bound to a property.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.DataBindingMode.All">
+            <summary>
+            Requires that all columns and all properties be bound.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.IDataColumn">
+            <summary>
+            Defines a data column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.IDataColumn.Name">
+            <summary>
+            The column name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.IDataColumn.ColumnType">
+            <summary>
+            The column data type.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.IDataColumn.AllowNull">
+            <summary>
+            Indicates if the column allows null values.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.IDataColumn.IsDbNull(System.Data.Common.DbDataReader)">
+            <summary>
+            Determines if the column value is null.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.IDataColumn.GetValue(System.Data.Common.DbDataReader)">
+            <summary>
+            Gets the object value of the column.
+            </summary>
+            <param name="reader"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Sylvan.Data.IDataColumn.GetValue``1(System.Data.Common.DbDataReader)">
+            <summary>
+            Gets the value of the column.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.IDataColumn.GetData``1(System.Data.Common.DbDataReader,``0[],System.Int64,System.Int32,System.Int32)">
+            <summary>
+            Gets a range of data from the column.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.CustomDataColumn`1">
+            <summary>
+            Defines a custom data column.
+            </summary>
+            <typeparam name="T"></typeparam>
+        </member>
+        <member name="P:Sylvan.Data.CustomDataColumn`1.Name">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.CustomDataColumn`1.ColumnType">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.CustomDataColumn`1.AllowNull">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.CustomDataColumn`1.IsDbNull(System.Data.Common.DbDataReader)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.CustomDataColumn`1.GetValue``1(System.Data.Common.DbDataReader)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.CustomDataColumn`1.GetValue(System.Data.Common.DbDataReader)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.CustomDataColumn`1.GetData``1(System.Data.Common.DbDataReader,``0[],System.Int64,System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.CustomDataColumn`1.#ctor(System.String,System.Func{System.Data.Common.DbDataReader,`0})">
+            <summary>
+            Creates a new CustomDataColumn instance.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.ObjectDataReader">
+            <summary>
+            Provides methods for constructing DbDataReader instances
+            over object collections.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.Create``1(System.Collections.Generic.IEnumerable{``0})">
+            <summary>
+            Creates a DbDataReader over a sequence of objects.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.Create``1(System.Collections.Generic.IAsyncEnumerable{``0},System.Threading.CancellationToken)">
+            <summary>
+            Creates a DbDataReader over a sequence of objects.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.CreateBuilder``1(System.Collections.Generic.IEnumerable{``0})">
+            <summary>
+            Creates an ObjectDataReader.Builder for the provided data.
+            </summary>
+            <remarks>
+            This overload is useful when the type T is an anonymous type.
+            </remarks>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.CreateBuilder``1">
+            <summary>
+            Creates an ObjectDataReader.Builder for reading data from the type T.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.ObjectDataReader.Builder`1">
+            <summary>
+            A builder for constructing DbDataReader over object data.
+            </summary>
+            <typeparam name="T"></typeparam>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.Builder`1.#ctor">
+            <summary>
+            Creates a new ObjectDataReader.Builder{T}.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.Builder`1.AddColumn``1(System.String,System.Func{`0,System.Nullable{``0}})">
+            <summary>
+            Adds a column to the DbDataReader.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.Builder`1.AddColumn``1(System.String,System.Func{`0,``0})">
+            <summary>
+            Adds a column to the DbDataReader.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.Builder`1.AddAllProperties">
+            <summary>
+            Adds all public properties to the DbDataReader.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.ObjectDataReader.Builder`1.Build(System.Collections.Generic.IEnumerable{`0})">
+            <summary>
+            Builds a DbDataReader over the data that will read the columns defined by the builder.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Schema">
+            <summary>
+            Provides schema information for data.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Schema.Builder">
+            <summary>
+            Builder for creating Schema.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Builder.#ctor">
+            <summary>
+            Creates a new Builder.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Builder.Count">
+            <summary>
+            Gets the number of columns the builder defines.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Builder.Item(System.Int32)">
+            <summary>
+            Gets the builder at the given ordinal.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Builder.#ctor(System.Collections.Generic.IEnumerable{System.Data.Common.DbColumn})">
+            <summary>
+            Creates a new Builder.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Builder.Add(Sylvan.Data.Schema.Column.Builder)">
+            <summary>
+            Adds a column to the schema.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Builder.Add``1(System.String,System.Boolean)">
+            <summary>
+            Adds a column to the schema.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Builder.Build">
+            <summary>
+            Builds an immutable Schema instance.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Builder.GetEnumerator">
+            <summary>
+            Gets the columns in the schema.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:Sylvan.Data.Schema.Column">
+            <summary>
+            A column in the schema.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Schema.Column.Builder">
+            <summary>
+            A builder for a <see cref="T:Sylvan.Data.Schema.Column"/>.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Column.Builder.#ctor">
+            <summary>
+            Creates a new column builder.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Column.Builder.#ctor(System.String,System.Type,System.Boolean)">
+            <summary>
+            Creates a new column builder.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Column.Builder.#ctor(System.String,System.Data.DbType,System.Boolean)">
+            <summary>
+            Creates a new column builder.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Column.Builder.SetType(System.Type)">
+            <summary>
+            Sets the column type.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Column.Builder.#ctor(System.Data.Common.DbColumn)">
+            <summary>
+            Creates a new column builder, copying an existing DbColumn.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.AllowDBNull">
+            <summary>
+            Gets or sets a value indicating if the column allows nulls.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.BaseCatalogName">
+            <summary>
+            Gets or sets the base catalog name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.BaseColumnName">
+            <summary>
+            Gets or sets the base column name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.BaseSchemaName">
+            <summary>
+            Gets or sets the base schema name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.BaseServerName">
+            <summary>
+            Gets or sets the base server name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.BaseTableName">
+            <summary>
+            Gets or sets the base table name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.ColumnOrdinal">
+            <summary>
+            Gets or sets the column ordinal.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.ColumnName">
+            <summary>
+            Gets or sets the column name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.ColumnSize">
+            <summary>
+            Gets or sets the column size.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.DataType">
+            <summary>
+            Gets or sets the data type.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.DataTypeName">
+            <summary>
+            Gets or sets the data type name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsAliased">
+            <summary>
+            Gets or sets a value indicating if the column is aliased.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsAutoIncrement">
+            <summary>
+            Gets or sets a value indicating if the column is auto-increment.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsExpression">
+            <summary>
+            Gets or sets a value indicating if the column is an expression.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsHidden">
+            <summary>
+            Gets or sets a value indicating if the column is hidden.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsIdentity">
+            <summary>
+            Gets or sets a value indicating if the column is an identity column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsKey">
+            <summary>
+            Gets or sets a value indicating if the column is a key column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsLong">
+            <summary>
+            Gets or sets a value indicating if the column is long.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsReadOnly">
+            <summary>
+            Gets or sets a value indicating if the column is read-only.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.IsUnique">
+            <summary>
+            Gets or sets a value indicating if the column is unique.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.NumericPrecision">
+            <summary>
+            Gets or sets the numeric precision of the column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.NumericScale">
+            <summary>
+            Gets or sets the scale precision of the column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.UdtAssemblyQualifiedName">
+            <summary>
+            Gets or sets user-defined assembly qualified name.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.BaseColumnOrdinal">
+            <summary>
+            Gets or sets the base column ordinal.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Builder.CommonDataType">
+            <summary>
+            Gets or sets the column data type.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Column.Builder.Build">
+            <summary>
+            Builds the immutable Schema.Column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.BaseColumnOrdinal">
+            <summary>
+            Gets the ordinal of the column in the base data source.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.CommonDataType">
+            <summary>
+            Gets the data type of the column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Format">
+            <summary>
+            Gets the preferred format string for the column data.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Column.Item(System.String)">
+            <summary>
+            Gets the metadata property value with the given name.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.FromSchemaTable(System.Data.DataTable)">
+            <summary>
+            Gets a Schema instance defining the schema from schemaTable.
+            </summary>
+            <param name="schemaTable">A DataTable returned from a <see cref="M:System.Data.IDataReader.GetSchemaTable"/></param>
+            <returns>A schema instance.</returns>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Count">
+            <summary>
+            Gets the number of columns in the schema.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Schema.Item(System.Int32)">
+            <summary>
+            Gets the column at the given index.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.op_Implicit(Sylvan.Data.Schema)~System.Collections.ObjectModel.ReadOnlyCollection{System.Data.Common.DbColumn}">
+            <summary>
+            Converts the schema to a <see cref="T:System.Collections.ObjectModel.ReadOnlyCollection`1"/>.
+            </summary>
+            <param name="schema"></param>
+        </member>
+        <member name="M:Sylvan.Data.Schema.#ctor(System.Data.Common.DbDataReader)">
+            <summary>
+            Creates a Schema from the schema of an existing data reader.
+            </summary>
+            <param name="dataReader">The data reader to use as a schema template.</param>
+        </member>
+        <member name="M:Sylvan.Data.Schema.#ctor(System.Collections.ObjectModel.ReadOnlyCollection{System.Data.Common.DbColumn})">
+            <summary>
+            Creates a Schema from an existing schema.
+            </summary>
+            <param name="schema">The schema to use as a template.</param>
+        </member>
+        <member name="M:Sylvan.Data.Schema.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Schema.Parse(System.String)">
+            <summary>
+            Parses the specification string into a Schema object.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.GetColumnSchema">
+            <summary>
+            Gets a column schema representing the current schema.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Schema.GetEnumerator">
+            <summary>
+            Gets an enumerator of the schema column.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.AnalysisResult">
+            <summary>
+            The result of a data analysis process.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.AnalysisResult.GetEnumerator">
+            <summary>
+            Enumerates the columns in the analysis result.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Sylvan.Data.AnalysisResult.GetSchema">
+            <summary>
+            Gets a schema representing the analysis result.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Sylvan.Data.AnalysisResult.GetSchemaBuilder">
+            <summary>
+            Gets the schema builder for the analysis result.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.SchemaAnalyzerOptions">
+            <summary>
+            Options for a data schema analysis operation.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.SchemaAnalyzerOptions.#ctor">
+            <summary>
+            Creates a new SchemaAnalyzerOptions with the default values.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.SchemaAnalyzerOptions.AnalyzeRowCount">
+            <summary>
+            The number of rows to analyze.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.SchemaAnalyzerOptions.DetectSeries">
+            <summary>
+            Indicates if series detection should be enabled.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.SchemaAnalyzer">
+            <summary>
+            Analyzes weakly-typed string data to determine schema information.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.SchemaAnalyzer.#ctor(Sylvan.Data.SchemaAnalyzerOptions)">
+            <summary>
+            Creates a new SchemaAnalyzer.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.SchemaAnalyzer.Analyze(System.Data.Common.DbDataReader)">
+            <summary>
+            Analyzes a data set.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.SchemaAnalyzer.AnalyzeAsync(System.Data.Common.DbDataReader)">
+            <summary>
+            Analyzes a data set.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.ColumnInfo">
+            <summary>
+            Schema analysis information for a data column.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.ColumnInfo.AllowDbNull">
+            <summary>
+            Indicates if the column allows null values.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.ColumnInfo.Ordinal">
+            <summary>
+            Gets the column oridnal.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.ColumnInfo.Name">
+            <summary>
+            Gets the column name.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.SimpleSchemaSerializer.Parse(System.String)">
+            <summary>
+            Attempts to parse a schema specification.
+            </summary>
+            <param name="spec">The schema specification string.</param>
+            <returns>A Schema, or null if it failed to parse.</returns>
+        </member>
+        <member name="M:Sylvan.Data.SimpleSchemaSerializer.GetSchemaSpec(Sylvan.Data.Schema)">
+            <summary>
+            Gets the specification string for this schema.
+            </summary>
+            <returns>A string.</returns>
+        </member>
+        <member name="T:Sylvan.Data.DataValidationHandler">
+            <summary>
+            Defines a method for handling schema violations.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.DataValidationContext">
+            <summary>
+            Provides contextual information about records that violate schema requirements.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.DataValidationContext.DataReader">
+            <summary>
+            The data reader being validated.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataValidationContext.GetErrors">
+            <summary>
+            Gets the ordinals that contained errors.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataValidationContext.GetException(System.Int32)">
+            <summary>
+            Gets the exception that was thrown when processing the column.
+            </summary>
+            <param name="ordinal">The column ordinal.</param>
+            <returns>An exception or null.</returns>
+        </member>
+        <member name="M:Sylvan.Data.DataValidationContext.SetValue``1(System.Int32,``0)">
+            <summary>
+            Sets the value for a field.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataValidationContext.SetValue(System.Int32,System.Object)">
+            <summary>
+            Sets the value for a field.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataValidationContext.GetValue``1(System.Int32)">
+            <summary>
+            Gets the value of a field.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.DataValidationContext.GetValue(System.Int32)">
+            <summary>
+            Gets the value of a field.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.ISeries`2">
+            <summary>
+            A data series.
+            </summary>
+            <typeparam name="TK">The series key type.</typeparam>
+            <typeparam name="TV">The series value type.</typeparam>
+        </member>
+        <member name="P:Sylvan.Data.ISeries`2.Minimum">
+            <summary>
+            Gets the minimum key value in the range.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.ISeries`2.Maximum">
+            <summary>
+            Gets the maximum key value in the range.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.ISeries`2.Keys">
+            <summary>
+            Gets the keys of the range.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.ISeries`2.Values">
+            <summary>
+            Gets the values over the range.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Series`2">
+            <summary>
+            A simple data series.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Series`2.Minimum">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Series`2.Maximum">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Series`2.Keys">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Series`2.Values">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Series`2.#ctor(Sylvan.Data.DataSeriesAccessor{`0,`1},System.Data.Common.DbDataReader)">
+            <summary>
+            Creates a new Series instance.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Series`2.GetEnumerator">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.CodeGeneration.IdentifierStyle">
+            <summary>
+            Provides conversions between different styles of identifiers.
+            </summary>
+        </member>
+        <member name="F:Sylvan.CodeGeneration.IdentifierStyle.PascalCase">
+            <summary>
+            A "PascalCase" identifier style.
+            </summary>
+        </member>
+        <member name="M:Sylvan.CodeGeneration.IdentifierStyle.Convert(System.String)">
+            <summary>
+            Converts a string to the given identifier style.
+            </summary>
+        </member>
+        <member name="T:Sylvan.CodeGeneration.PascalCaseStyle">
+            <summary>
+            The pascale identifier style.
+            </summary>
+        </member>
+        <member name="M:Sylvan.CodeGeneration.PascalCaseStyle.Convert(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.CodeGeneration.CasingStyle">
+            <summary>
+            The casing style used within segments.
+            </summary>
+        </member>
+        <member name="F:Sylvan.CodeGeneration.CasingStyle.Unchanged">
+            <summary>
+            Use the casing of the original identifier.
+            </summary>
+        </member>
+        <member name="F:Sylvan.CodeGeneration.CasingStyle.UpperCase">
+            <summary>
+            UpperCase every character.
+            </summary>
+        </member>
+        <member name="F:Sylvan.CodeGeneration.CasingStyle.LowerCase">
+            <summary>
+            LowerCase every character.
+            </summary>
+        </member>
+        <member name="F:Sylvan.CodeGeneration.CasingStyle.TitleCase">
+            <summary>
+            UpperCase first character, and lowercase the rest.
+            </summary>
+        </member>
+    </members>
+</doc>

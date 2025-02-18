@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>Sylvan.Data.Excel</id>
+    <version>0.4.17</version>
+    <authors>Mark Pflug</authors>
+    <license type="file">license.txt</license>
+    <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>
+    <icon>Sylvan.png</icon>
+    <readme>readme.md</readme>
+    <projectUrl>https://github.com/MarkPflug/Sylvan.Data.Excel</projectUrl>
+    <iconUrl>https://markpflug.github.io/Sylvan.png</iconUrl>
+    <description>A cross-platform .NET library for reading Excel data files.</description>
+    <copyright>© 2022 Mark Pflug</copyright>
+    <tags>excel xls xlsx xlsb datareader .NET Sylvan</tags>
+    <repository type="git" url="https://github.com/MarkPflug/Sylvan.Data.Excel" commit="3db441d56e22ef96fd677d34475a275b4442b745" />
+    <dependencies>
+      <group targetFramework="net6.0" />
+      <group targetFramework=".NETStandard2.0" />
+      <group targetFramework=".NETStandard2.1" />
+    </dependencies>
+  </metadata>
+</package>

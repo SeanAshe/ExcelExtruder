@@ -1,0 +1,933 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Sylvan.Data.Excel</name>
+    </assembly>
+    <members>
+        <member name="T:Sylvan.IO.PooledMemoryStream">
+            <summary>
+            A memory-backed <see cref="T:System.IO.Stream"/> implementation using pooled buffers.
+            </summary>
+            <remarks>
+            This class uses pooled buffers to reduce allocations, and memory clearing
+            that are present with <see cref="T:System.IO.MemoryStream"/>.
+            </remarks>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.#ctor">
+            <summary>
+            Creates a PooledMemoryStream.
+            </summary>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.#ctor(System.Buffers.ArrayPool{System.Byte},System.Int32,System.Boolean)">
+            <summary>
+            Creates a PooledMemoryStream.
+            </summary>
+            <param name="bufferPool">The <see cref="T:System.Buffers.ArrayPool`1"/> to use.</param>
+            <param name="blockShift">The size of the buffer to use expressed 1 &lt;&lt; blockShift. (Valid values 6 - 24)</param>
+            <param name="clearOnReturn">A boolean indicating whether to clear the buffers after use.</param>
+        </member>
+        <member name="P:Sylvan.IO.PooledMemoryStream.CanRead">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.IO.PooledMemoryStream.CanSeek">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.IO.PooledMemoryStream.CanWrite">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.IO.PooledMemoryStream.Length">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.IO.PooledMemoryStream.Position">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.Flush">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.Read(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.Seek(System.Int64,System.IO.SeekOrigin)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.SetLength(System.Int64)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.Write(System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.CopyToAsync(System.IO.Stream,System.Int32,System.Threading.CancellationToken)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.CopyTo(System.IO.Stream,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.IO.PooledMemoryStream.Dispose(System.Boolean)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelDataReader">
+            <summary>
+            A DbDataReader implementation that reads data from an Excel file.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetFieldType(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetSchemaTable">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.CreateAsync(System.String,Sylvan.Data.Excel.ExcelDataReaderOptions,System.Threading.CancellationToken)">
+            <summary>
+            Asynchronously creates a new ExcelDataReader.
+            </summary>
+            <param name="filename">The name of the file to open.</param>
+            <param name="options">An optional ExcelDataReaderOptions instance.</param>
+            <param name="cancel">A CancellationToken.</param>
+            <returns>The ExcelDataReader.</returns>
+            <exception cref="T:System.ArgumentException">If the filename refers to a file of an unknown type.</exception>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.CreateAsync(System.IO.Stream,Sylvan.Data.Excel.ExcelWorkbookType,Sylvan.Data.Excel.ExcelDataReaderOptions,System.Threading.CancellationToken)">
+            <summary>
+            Creates a new ExcelDataReader instance.
+            </summary>
+            <param name="stream">A stream containing the Excel file contents. </param>
+            <param name="fileType">The type of file represented by the stream.</param>
+            <param name="options">An optional ExcelDataReaderOptions instance.</param>
+            <param name="cancel"></param>
+            <returns>The ExcelDataReader.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.Create(System.String,Sylvan.Data.Excel.ExcelDataReaderOptions)">
+            <summary>
+            Creates a new ExcelDataReader.
+            </summary>
+            <param name="filename">The name of the file to open.</param>
+            <param name="options">An optional ExcelDataReaderOptions instance.</param>
+            <returns>The ExcelDataReader.</returns>
+            <exception cref="T:System.ArgumentException">If the filename refers to a file of an unknown type.</exception>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.Create(System.IO.Stream,Sylvan.Data.Excel.ExcelWorkbookType,Sylvan.Data.Excel.ExcelDataReaderOptions)">
+            <summary>
+            Creates a new ExcelDataReader instance.
+            </summary>
+            <param name="stream">A stream containing the Excel file contents. </param>
+            <param name="fileType">The type of file represented by the stream.</param>
+            <param name="options">An optional ExcelDataReaderOptions instance.</param>
+            <returns>The ExcelDataReader.</returns>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.IsClosed">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.Close">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.RowFieldCount">
+            <summary>
+            Gets the number of fields in the current row.
+            This may be different than FieldCount.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.MaxFieldCount">
+            <summary>
+            Gets the maximum number of fields supported by the
+            file.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetWorkbookType(System.String)">
+            <summary>
+            Gets the type of an Excel workbook from the file name.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.TryOpenWorksheet(System.String)">
+            <summary>
+            Tries to open a worksheet.
+            </summary>
+            <param name="name">The name of the worksheet to open.</param>
+            <returns>True if the sheet was opened, otherwise false.</returns>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.WorksheetNames">
+            <summary>
+            Gets the names of the worksheets in the workbook.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.WorksheetCount">
+            <summary>
+            Gets the number of worksheets in the workbook.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.WorksheetName">
+            <summary>
+            Gets the name of the current worksheet.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.WorkbookType">
+            <summary>
+            Gets the type of workbook being read.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.RowCount">
+            <summary>
+            Gets the number of rows in the current sheet.
+            </summary>
+            <remarks>
+            Can return -1 to indicate that the number of rows is unknown.
+            </remarks>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.FieldCount">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetName(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetOrdinal(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetExcelDataType(System.Int32)">
+            <summary>
+            Gets the type of data in the given cell.
+            </summary>
+            <remarks>
+            Excel only explicitly supports storing either string or numeric (double) values.
+            Date and Time values are represented by formatting applied to numeric values.
+            Formulas can produce string, numeric, boolean or error values. 
+            Boolean and error values are only produced as formula results.
+            The Null type represents missing rows or cells.
+            </remarks>
+            <param name="ordinal">The zero-based column ordinal.</param>
+            <returns>An ExcelDataType.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetExcelValue(System.Int32)">
+            <summary>
+            Gets the value as represented in Excel.
+            </summary>
+            <remarks>
+            Formula errors are returned as ExcelErrorCode values, rather than throwing an exception.
+            </remarks>
+            <param name="ordinal">The column ordinal to retrieve.</param>
+            <returns>The value.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetColumnSchema">
+            <summary>
+            Gets the column schema of the current worksheet.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.Initialize">
+            <summary>
+            Initializes the schema starting with the current row.
+            </summary>
+            <remarks>
+            This can be used when a worksheet has "header" rows with non-data content.
+            Read past the header, and call Initialize when the row of tabular data is found.
+            </remarks>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetValues(System.Object[])">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetValue(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetEnumerator">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.Depth">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.Item(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.Item(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetDataTypeName(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.RecordsAffected">
+            <inheritdoc/>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.HasRows">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetFormulaError(System.Int32)">
+            <summary>
+            Gets the <see cref="T:Sylvan.Data.Excel.ExcelErrorCode"/> of the error in the given cell.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetFormat(System.Int32)">
+            <summary>
+            Gets the <see cref="T:Sylvan.Data.Excel.ExcelFormat"/> of the format for the given cell.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReader.RowNumber">
+            <summary>
+            Gets the number of the current row, as would be reported in Excel.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetDateTime(System.Int32)">
+            <summary>
+            Gets the value of the column as a DateTime.
+            </summary>
+            <remarks>
+            When called on cells containing a string value, will attempt to parse the string as a DateTime.
+            When called on a cell containing a number value, will convert the numeric value to a DateTime.
+            </remarks>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetTimeSpan(System.Int32)">
+            <summary>
+            Gets the value of the column as a TimeSpan.
+            </summary>
+            <remarks>
+            When called on cells containing a string value, will attempt to parse the string as a TimeSpan.
+            When called on a cell containing a number value, will convert the numeric value to a DateTime and return the Time component.
+            </remarks>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.IsDBNull(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetString(System.Int32)">
+            <summary>
+            Gets the value of the column as a string.
+            </summary>
+            <remarks>
+            With the default configuration, this method is safe to call on all cells.
+            For cells with missing/null data or a formula error, it will produce an empty string.
+            </remarks>
+            <param name="ordinal">The zero-based column ordinal.</param>
+            <returns>A string representing the value of the column.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetFloat(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetDouble(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetBoolean(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetInt16(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetInt32(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetInt64(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetDecimal(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetGuid(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetByte(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetBytes(System.Int32,System.Int64,System.Byte[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetChar(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetChars(System.Int32,System.Int64,System.Char[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetStream(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetTextReader(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReader.GetFieldValue``1(System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelDataReaderOptions">
+            <summary>
+            Options for controlling the behavior of an <see cref="T:Sylvan.Data.Excel.ExcelDataReader"/>.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataReaderOptions.#ctor">
+            <summary>
+            Creates a new ExcelDataReaderOptions with the default values.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.Schema">
+            <summary>
+            Gets or sets the schema for the data in the workbook.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.GetErrorAsNull">
+            <summary>
+            Indicates if a cell will appear null or throw an ExcelFormulaException when accesing a cell containing a formula error.
+            Defaults to false, which causes errors to be thrown.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.ReadHiddenWorksheets">
+            <summary>
+            Indicates if hidden worksheets should be read, or skipped.
+            Defaults to false, which skips hidden sheets.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.TrueString">
+            <summary>
+            The string which represents true values when reading boolean. Defaults to null.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.FalseString">
+            <summary>
+            The string which represents false values when reading boolean. Defaults to null.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.DateTimeFormat">
+            <summary>
+            A format string used to parse DateTime values.
+            </summary>
+            <remarks>
+            This is only used in the very rare case that a date value is stored as a string
+            in Excel, and is being accessed with GetDateTime() accessor.
+            </remarks>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.Culture">
+            <summary>
+            The culture to use when parsing values. 
+            This is only used when accessing and converting values stored as a string.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataReaderOptions.OwnsStream">
+            <summary>
+            Indicates that the data stream should be disposed when the reader is disposed.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelDataType">
+            <summary>
+            Represents in internal data types supported by Excel.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelDataType.Null">
+            <summary>
+            A cell that contains no value.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelDataType.Numeric">
+            <summary>
+            A numeric value. This is also used to represent DateTime values.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelDataType.DateTime">
+            <summary>
+            A DateTime value. This is an uncommonly used representation in .xlsx files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelDataType.String">
+            <summary>
+            A text field.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelDataType.Boolean">
+            <summary>
+            A formula cell that contains a boolean.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelDataType.Error">
+            <summary>
+            A formula cell that contains an error.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelDataWriter">
+            <summary>
+            Writes data to Excel files.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.CreateAsync(System.String,Sylvan.Data.Excel.ExcelDataWriterOptions,System.Threading.CancellationToken)">
+            <summary>
+            Creates a new ExcelDataWriter.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.CreateAsync(System.IO.Stream,Sylvan.Data.Excel.ExcelWorkbookType,Sylvan.Data.Excel.ExcelDataWriterOptions,System.Threading.CancellationToken)">
+            <summary>
+            Creates a new ExcelDataWriter.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.Create(System.String,Sylvan.Data.Excel.ExcelDataWriterOptions)">
+            <summary>
+            Creates a new ExcelDataWriter.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.Create(System.IO.Stream,Sylvan.Data.Excel.ExcelWorkbookType,Sylvan.Data.Excel.ExcelDataWriterOptions)">
+            <summary>
+            Creates a new ExcelDataWriter.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.DisposeAsync">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.Write(System.Data.Common.DbDataReader,System.String)">
+            <summary>
+            Writes data to a new worksheet with the given name.
+            </summary>
+            <returns>The number of rows written.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriter.WriteAsync(System.Data.Common.DbDataReader,System.String,System.Threading.CancellationToken)">
+            <summary>
+            Writes data to a new worksheet with the given name.
+            </summary>
+            <returns>The number of rows written.</returns>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelDataWriter.WriteResult">
+            <summary>
+            A value indicating the result of the write operation.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataWriter.WriteResult.RowsWritten">
+            <summary>
+            Gets the number of rows written.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataWriter.WriteResult.IsComplete">
+            <summary>
+            Indicates if all rows from the 
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelDataWriterOptions">
+            <summary>
+            Options for controlling the behavior of an <see cref="T:Sylvan.Data.Excel.ExcelDataWriter"/>.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelDataWriterOptions.#ctor">
+            <summary>
+            Creates a new ExcelDataWriterOptions instance when the default settings.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataWriterOptions.OwnsStream">
+            <summary>
+            Indicates if the ExcelDataWriter owns the output stream and handle disposal.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataWriterOptions.TruncateStrings">
+            <summary>
+            Indicates if string values should be truncated to the limit of Excel, which allows a maximum of 32k characters.
+            </summary>
+            <remarks>When false, an exception will be thrown if a string values exceeds the limit.</remarks>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelDataWriterOptions.CompressionLevel">
+            <summary>
+            The compression level to use.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelFileType">
+            <summary>
+            Exposes information about the supported Excel file types.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelFileExtension">
+            <summary>
+            The file extension for .xls files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelContentType">
+            <summary>
+            The content type for .xls files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelXmlFileExtension">
+            <summary>
+            The file extension for .xlsx files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelXmlContentType">
+            <summary>
+            The content type for .xlsx files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelXmlMacroEnabledFileExtension">
+            <summary>
+            The file extension for .xlsm files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelXmlMacroEnabledContentType">
+            <summary>
+            The content type for .xlsx files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelBinaryFileExtension">
+            <summary>
+            The file extension for .xlsb files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelBinaryContentType">
+            <summary>
+            The content type for .xlsx files.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.Excel">
+            <summary>
+            The .xls file type.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelXml">
+            <summary>
+            The .xlsx file type.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelXmlMacroEnabled">
+            <summary>
+            The .xlsm file type.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelFileType.ExcelBinary">
+            <summary>
+            The .xlsb file type.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFileType.All">
+            <summary>
+            Enumerates all the file types exposed by the Sylvan library.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFileType.ReaderSupported">
+            <summary>
+            Enumerates all file types supported by the ExcelDataReader.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFileType.WriterSupported">
+            <summary>
+            Enumerates all file types supported by the ExcelDataWriter.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelFileType.FindForFilename(System.String)">
+            <summary>
+            Gets the ExcelFileType for a given filename.
+            </summary>
+            <returns>An ExcelFileType or null.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelFileType.FindForExtension(System.String)">
+            <summary>
+            Gets the ExcelFileType for a given file extension.
+            </summary>
+            <returns>An ExcelFileType or null.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelFileType.FindForContentType(System.String)">
+            <summary>
+            Gets the ExcelFileType for a given content type.
+            </summary>
+            <returns>An ExcelFileType or null.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelFileType.GetForWorkbookType(Sylvan.Data.Excel.ExcelWorkbookType)">
+            <summary>
+            Gets the ExcelFileType for a ExcelWorkbookType.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelFileType.IsExcelContentType(System.String)">
+            <summary>
+            Determines if the string defines a known Excel ContentType.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFileType.Extension">
+            <summary>
+            Gets the file extension.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFileType.ContentType">
+            <summary>
+            Gets the Content-Type.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFileType.WorkbookType">
+            <summary>
+            Gets the ExcelWorkbookType.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.FormatKind">
+            <summary>
+            Indicates the kind of data the format string represents.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.FormatKind.String">
+            <summary>
+            Format produces a string.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.FormatKind.Number">
+            <summary>
+            The format produces a number.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.FormatKind.Date">
+            <summary>
+            The format produces a date and possibly time.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.FormatKind.Time">
+            <summary>
+            The format produces a time with no date.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelErrorCode">
+            <summary>
+            Indicates the kind of error a formula produced.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelErrorCode.Null">
+            <summary>
+            A null reference error.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelErrorCode.DivideByZero">
+            <summary>
+            A division by zero error.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelErrorCode.Value">
+            <summary>
+            A value error indicating a function requires a numeric but was given a string.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelErrorCode.Reference">
+            <summary>
+            A reference error indicating a function references a location that doesn't exist.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelErrorCode.Name">
+            <summary>
+            A name error indicating the function references an unknown operation.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelErrorCode.Number">
+            <summary>
+            A number error indicating the function expected a number in a certain range.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelErrorCode.NotAvailable">
+            <summary>
+            An error indicating the function attempted to lookup a value that isn't available.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelFormulaException">
+            <summary>
+            An exception that is thrown when attempting to access a value in a cell that contains a function error.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFormulaException.Row">
+            <summary>
+            The row containing the error.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFormulaException.Column">
+            <summary>
+            The column containing the error.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFormulaException.ErrorCode">
+            <summary>
+            The error code indicating the kind of error.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelFormat">
+            <summary>
+            An Excel format object indicating how a cell value is displayed.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFormat.Format">
+            <summary>
+            Gets the format string.
+            </summary>
+        </member>
+        <member name="P:Sylvan.Data.Excel.ExcelFormat.Kind">
+            <summary>
+            Gets the kind of value the format string specifies.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelFormat.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelSchema">
+            <summary>
+            An implementation of IExcelSchemaProvider that allows defining per-column types.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelSchema.Default">
+            <summary>
+            A schema that expects each sheet to have a header row, and describes
+            each column as being a nullable string.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelSchema.Dynamic">
+            <summary>
+            A schema that expects each sheet to have a header row, and describes
+            each column as being a nullable object. This causes each cell to be interpreted
+            dynamically when accessed using <see cref="M:Sylvan.Data.Excel.ExcelDataReader.GetValue(System.Int32)"/>.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelSchema.NoHeaders">
+            <summary>
+            A schema that does not expect each sheet to have a header row, and describes
+            each column as being a nullable string. Column names are exposed as the Excel column header "A", "B", etc.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchema.#ctor(System.Boolean,System.Collections.Generic.IEnumerable{System.Data.Common.DbColumn})">
+            <summary>
+            Creates a new ExcelSchema instance.
+            </summary>
+            <param name="hasHeaders">Indicates if the sheet contains a header row.</param>
+            <param name="columns">The schema column definitions for the sheet.</param>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchema.#ctor">
+            <summary>
+            Creates a new ExcelSchema instance.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchema.Add(System.String,System.Boolean,System.Collections.Generic.IEnumerable{System.Data.Common.DbColumn})">
+            <summary>
+            Adds a schema for a specific sheet.
+            </summary>
+            <param name="sheetName">The name of the sheet the schema applies to.</param>
+            <param name="hasHeaders">Incidates if the sheet has a header row.</param>
+            <param name="columns">The schema column definitions for the sheet.</param>
+            <exception cref="T:System.ArgumentNullException">If the sheet name is null.</exception>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchema.GetColumn(System.String,System.String,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchema.HasHeaders(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelWorkbookType">
+            <summary>
+            The type of workbook.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelWorkbookType.Unknown">
+            <summary>
+            Represents an unknown workbook type.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelWorkbookType.Excel">
+            <summary>
+            An .xls file.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelWorkbookType.ExcelXml">
+            <summary>
+            An .xlsx file.
+            </summary>
+        </member>
+        <member name="F:Sylvan.Data.Excel.ExcelWorkbookType.ExcelBinary">
+            <summary>
+            An .xslb file.
+            </summary>
+        </member>
+        <member name="T:Sylvan.Data.Excel.ExcelSchemaProvider">
+            <summary>
+            A base implementation of IExcelSchemaProvider
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchemaProvider.GetColumn(System.String,System.String,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchemaProvider.HasHeaders(System.String)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Sylvan.Data.Excel.ExcelSchemaProvider.GetFieldCount(Sylvan.Data.Excel.ExcelDataReader)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Sylvan.Data.Excel.IExcelSchemaProvider">
+            <summary>
+            Provides schema information for an Excel data file.
+            </summary>
+        </member>
+        <member name="M:Sylvan.Data.Excel.IExcelSchemaProvider.HasHeaders(System.String)">
+            <summary>
+            Called to determine if a worksheet contains a header row.
+            </summary>
+            <param name="sheetName">The name of the worksheet.</param>
+            <returns>True if the first row should be interpreted as column headers.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.IExcelSchemaProvider.GetFieldCount(Sylvan.Data.Excel.ExcelDataReader)">
+            <summary>
+            Called to get the number of fields in the worksheet.
+            </summary>
+            <param name="reader">The reader being initialized.</param>
+            <returns>The number of fields.</returns>
+        </member>
+        <member name="M:Sylvan.Data.Excel.IExcelSchemaProvider.GetColumn(System.String,System.String,System.Int32)">
+            <summary>
+            Called to determine the schema for a column in a worksheet.
+            </summary>
+            <param name="sheetName">The name of the worksheet.</param>
+            <param name="name">The name of the column</param>
+            <param name="ordinal">The ordinal position of the column.</param>
+            <returns>A DbColumn that defines the schema for the column.</returns>
+        </member>
+        <member name="T:Sylvan.IsoDate">
+            <summary>
+            Provides ISO 8601 date parsing.
+            </summary>
+        </member>
+        <member name="M:Sylvan.IsoDate.TryParse(System.ReadOnlySpan{System.Char},System.DateTime@)">
+            <summary>
+            Parse the given <paramref name="source"/> as extended ISO 8601 format.
+            </summary>
+            <param name="source">The source to parse.</param>
+            <param name="value">The parsed <see cref="T:System.DateTime"/> if successful.</param>
+            <returns>"true" if successfully parsed.</returns>
+        </member>
+        <member name="M:Sylvan.IsoDate.TryParse(System.ReadOnlySpan{System.Char},System.DateTimeOffset@)">
+            <summary>
+            Parse the given <paramref name="source"/> as extended ISO 8601 format.
+            </summary>
+            <param name="source">The source to parse.</param>
+            <param name="value">The parsed <see cref="T:System.DateTimeOffset"/> if successful.</param>
+            <returns>"true" if successfully parsed.</returns>
+        </member>
+        <member name="M:Sylvan.IsoDate.TryParseDateTimeOffset(System.ReadOnlySpan{System.Char},Sylvan.IsoDate.DateTimeParseData@)">
+             <summary>
+             ISO 8601 date time parser (ISO 8601-1:2019).
+             </summary>
+             <param name="source">The date/time to parse in UTF-8 format.</param>
+             <param name="parseData">The parsed <see cref="T:Sylvan.IsoDate.DateTimeParseData"/> for the given <paramref name="source"/>.</param>
+             <remarks>
+             Supports extended calendar date (5.2.2.1) and complete (5.4.2.1) calendar date/time of day
+             representations with optional specification of seconds and fractional seconds.
+            
+             Times can be explicitly specified as UTC ("Z" - 5.3.3) or offsets from UTC ("+/-hh:mm" 5.3.4.2).
+             If unspecified they are considered to be local per spec.
+            
+             Examples: (TZD is either "Z" or hh:mm offset from UTC)
+            
+              YYYY-MM-DD               (eg 1997-07-16)
+              YYYY-MM-DDThh:mm         (eg 1997-07-16T19:20)
+              YYYY-MM-DDThh:mm:ss      (eg 1997-07-16T19:20:30)
+              YYYY-MM-DDThh:mm:ss.s    (eg 1997-07-16T19:20:30.45)
+              YYYY-MM-DDThh:mmTZD      (eg 1997-07-16T19:20+01:00)
+              YYYY-MM-DDThh:mm:ssTZD   (eg 1997-07-16T19:20:3001:00)
+              YYYY-MM-DDThh:mm:ss.sTZD (eg 1997-07-16T19:20:30.45Z)
+            
+             Generally speaking we always require the "extended" option when one exists (3.1.3.5).
+             The extended variants have separator characters between components ('-', ':', '.', etc.).
+             Spaces are not permitted.
+             </remarks>
+             <returns>"true" if successfully parsed.</returns>
+        </member>
+        <member name="M:Sylvan.IsoDate.TryCreateDateTimeOffset(System.DateTime,Sylvan.IsoDate.DateTimeParseData@,System.DateTimeOffset@)">
+            <summary>
+            Overflow-safe DateTimeOffset factory.
+            </summary>
+        </member>
+        <member name="M:Sylvan.IsoDate.TryCreateDateTimeOffset(Sylvan.IsoDate.DateTimeParseData@,System.DateTimeOffset@)">
+            <summary>
+            Overflow-safe DateTimeOffset factory.
+            </summary>
+        </member>
+        <member name="M:Sylvan.IsoDate.TryCreateDateTimeOffsetInterpretingDataAsLocalTime(Sylvan.IsoDate.DateTimeParseData,System.DateTimeOffset@)">
+            <summary>
+            Overflow-safe DateTimeOffset/Local time conversion factory.
+            </summary>
+        </member>
+        <member name="M:Sylvan.IsoDate.WriteFourDigits(System.UInt32,System.Span{System.Char},System.Int32)">
+            <summary>
+            Writes a value [ 0000 .. 9999 ] to the buffer starting at the specified offset.
+            This method performs best when the starting index is a constant literal.
+            </summary>
+        </member>
+    </members>
+</doc>

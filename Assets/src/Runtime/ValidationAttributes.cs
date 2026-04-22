@@ -82,6 +82,24 @@ public class RangeAttribute : Attribute, IValidationAttribute
 public class NoFormulaAttribute : Attribute { }
 
 /// <summary>
+/// 显式声明某个类型对应的 Excel Sheet、输出名和主键字段。
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+public class ExcelSheetAttribute : Attribute
+{
+    public string SheetName { get; }
+    public string KeyField { get; }
+    public string OutputName { get; set; }
+
+    public ExcelSheetAttribute(string sheetName, string keyField, string outputName)
+    {
+        SheetName = sheetName;
+        KeyField = keyField;
+        OutputName = outputName;
+    }
+}
+
+/// <summary>
 /// Diff 校验接口，仅在数据发生改变时触发
 /// </summary>
 public interface IDiffValidationAttribute

@@ -40,7 +40,7 @@ namespace ExcelExtruder
     public partial class ExcelSheetInfo
     {
         /// <summary>
-        /// Excel 中的 Sheet 名称，也是资源文件名
+        /// Excel 中的 Sheet 名称
         /// </summary>
         public string SheetName { get; set; }
 
@@ -48,5 +48,20 @@ namespace ExcelExtruder
         /// 对应的数据类型全名，用于代码生成时输出正确的 C# 类型
         /// </summary>
         public string TypeName { get; set; }
+
+        /// <summary>
+        /// 导出后的资源文件名（不含扩展名）
+        /// </summary>
+        public string OutputName { get; set; }
+
+        /// <summary>
+        /// 显式注册的主键字段名
+        /// </summary>
+        public string KeyFieldName { get; set; }
+
+        /// <summary>
+        /// 主键字段类型全名，用于生成 Dictionary 索引
+        /// </summary>
+        public string KeyTypeName { get; set; }
     }
 }

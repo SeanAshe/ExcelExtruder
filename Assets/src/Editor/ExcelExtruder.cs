@@ -27,6 +27,7 @@ namespace ExcelExtruder
 
         private TypeConvert m_typeConvert;
         private DataValidator m_validator;
+        private ExcelSchemaRegistry m_schemaRegistry;
         private Action<string, float, string, string> _EVENT_PROGRESS;
         private Action _EVENT_END_PROGRESS;
         private Action<string> _EVENT_LOG;
@@ -47,18 +48,19 @@ namespace ExcelExtruder
             if (File.Exists(asmPath))
                 assembly = Assembly.LoadFile(Path.GetFullPath(asmPath));
 
-            m_typeConvert = typeConvert;
-            m_typeConvert.Init(assembly);
-            m_validator = new DataValidator();
-
-            if (!Directory.Exists(EXCELRES_PATH)) Directory.CreateDirectory(EXCELRES_PATH);
-            if (!Directory.Exists(CSV_PATH)) Directory.CreateDirectory(CSV_PATH);
-            if (!Directory.Exists(BIN_PATH)) Directory.CreateDirectory(BIN_PATH);
-
             _EVENT_PROGRESS = EVENT_PROGRESS;
             _EVENT_END_PROGRESS = EVENT_END_PROGRESS;
             _EVENT_LOG = EVENT_LOG;
             _EVENT_ERROR_LOG = EVENT_ERROR_LOG;
+
+            m_typeConvert = typeConvert;
+            m_typeConvert.Init(assembly);
+            m_validator = new DataValidator();
+            m_schemaRegistry = ExcelSchemaRegistry.Create(assembly, LogError);
+
+            if (!Directory.Exists(EXCELRES_PATH)) Directory.CreateDirectory(EXCELRES_PATH);
+            if (!Directory.Exists(CSV_PATH)) Directory.CreateDirectory(CSV_PATH);
+            if (!Directory.Exists(BIN_PATH)) Directory.CreateDirectory(BIN_PATH);
         }
 
         /// <summary>
@@ -111,6 +113,13 @@ namespace ExcelExtruder
             try
             {
                 Progress(0, "SerializeExcels", "Start");
+
+                if (m_schemaRegistry == null || m_schemaRegistry.HasErrors)
+                {
+                    LogError("Excel schema registry 无法使用，请先修复 [ExcelSheet] 注册错误");
+                    EndProgress();
+                    return;
+                }
 
                 var existingConfig = forceAll ? new ExcelConfig() : LoadExcelConfig();
                 var nextConfig = new ExcelConfig();
@@ -236,7 +245,10 @@ namespace ExcelExtruder
                 clone.Sheets.Add(new ExcelSheetInfo
                 {
                     SheetName = sheet.SheetName,
-                    TypeName = string.IsNullOrWhiteSpace(sheet.TypeName) ? sheet.SheetName : sheet.TypeName
+                    TypeName = string.IsNullOrWhiteSpace(sheet.TypeName) ? sheet.SheetName : sheet.TypeName,
+                    OutputName = string.IsNullOrWhiteSpace(sheet.OutputName) ? sheet.SheetName : sheet.OutputName,
+                    KeyFieldName = sheet.KeyFieldName,
+                    KeyTypeName = sheet.KeyTypeName
                 });
             }
 
@@ -259,14 +271,14 @@ namespace ExcelExtruder
             return Path.GetFullPath(Path.Combine(EXCELRES_PATH, relativePath.Replace('/', Path.DirectorySeparatorChar)));
         }
 
-        private string GetCsvOutputPath(string sheetName)
+        private string GetCsvOutputPath(string outputName)
         {
-            return Path.Combine(CSV_PATH, sheetName + ".csv");
+            return Path.Combine(CSV_PATH, outputName + ".csv");
         }
 
-        private string GetBinOutputPath(string sheetName)
+        private string GetBinOutputPath(string outputName)
         {
-            return Path.Combine(BIN_PATH, sheetName + ".bytes");
+            return Path.Combine(BIN_PATH, outputName + ".bytes");
         }
 
         private bool OutputsExist(ExcelFileInfo info)
@@ -279,7 +291,8 @@ namespace ExcelExtruder
                 if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName))
                     return false;
 
-                if (!File.Exists(GetCsvOutputPath(sheet.SheetName)) || !File.Exists(GetBinOutputPath(sheet.SheetName)))
+                var outputName = string.IsNullOrWhiteSpace(sheet.OutputName) ? sheet.SheetName : sheet.OutputName;
+                if (!File.Exists(GetCsvOutputPath(outputName)) || !File.Exists(GetBinOutputPath(outputName)))
                     return false;
             }
 
@@ -299,7 +312,10 @@ namespace ExcelExtruder
                 info.Sheets.Add(new ExcelSheetInfo
                 {
                     SheetName = sheet.SheetName,
-                    TypeName = sheet.TypeName
+                    TypeName = sheet.TypeName,
+                    OutputName = sheet.OutputName,
+                    KeyFieldName = sheet.KeyFieldName,
+                    KeyTypeName = sheet.KeyTypeName
                 });
             }
 
@@ -310,6 +326,7 @@ namespace ExcelExtruder
         {
             var errors = new List<string>();
             var owners = new Dictionary<string, string>(StringComparer.Ordinal);
+            var outputOwners = new Dictionary<string, string>(StringComparer.Ordinal);
 
             foreach (var file in config.Files)
             {
@@ -324,6 +341,12 @@ namespace ExcelExtruder
                     if (!owners.TryAdd(sheet.SheetName, file.Key))
                     {
                         errors.Add($"[重复Sheet] {sheet.SheetName} 同时存在于 {owners[sheet.SheetName]} 和 {file.Key}");
+                    }
+
+                    var outputName = string.IsNullOrWhiteSpace(sheet.OutputName) ? sheet.SheetName : sheet.OutputName;
+                    if (!outputOwners.TryAdd(outputName, file.Key + "/" + sheet.SheetName))
+                    {
+                        errors.Add($"[重复输出名] {outputName} 同时存在于 {outputOwners[outputName]} 和 {file.Key}/{sheet.SheetName}");
                     }
                 }
             }
@@ -354,8 +377,8 @@ namespace ExcelExtruder
             {
                 foreach (var sheet in result.Sheets)
                 {
-                    File.WriteAllText(GetCsvOutputPath(sheet.SheetName), sheet.CsvContent);
-                    File.WriteAllBytes(GetBinOutputPath(sheet.SheetName), sheet.BinaryData);
+                    File.WriteAllText(GetCsvOutputPath(sheet.OutputName), sheet.CsvContent);
+                    File.WriteAllBytes(GetBinOutputPath(sheet.OutputName), sheet.BinaryData);
                 }
             }
         }
@@ -393,8 +416,9 @@ namespace ExcelExtruder
             if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName))
                 return;
 
-            DeleteIfExists(GetCsvOutputPath(sheet.SheetName));
-            DeleteIfExists(GetBinOutputPath(sheet.SheetName));
+            var outputName = string.IsNullOrWhiteSpace(sheet.OutputName) ? sheet.SheetName : sheet.OutputName;
+            DeleteIfExists(GetCsvOutputPath(outputName));
+            DeleteIfExists(GetBinOutputPath(outputName));
         }
 
         private static void DeleteIfExists(string path)
@@ -417,6 +441,9 @@ namespace ExcelExtruder
         {
             public string SheetName;
             public string TypeName;
+            public string OutputName;
+            public string KeyFieldName;
+            public string KeyTypeName;
             public string CsvContent;
             public byte[] BinaryData;
         }
@@ -452,14 +479,14 @@ namespace ExcelExtruder
                     continue;
                 }
 
-                var classType = m_typeConvert.TryGetType(sheetName);
-                if (classType == null)
+                if (!m_schemaRegistry.TryGetSchema(sheetName, out var schema))
                 {
-                    LogError($"[{workbookRelativePath}/{sheetName}] 找不到对应的数据类型，Sheet 名需要与类名一致或唯一匹配");
+                    LogError($"[{workbookRelativePath}/{sheetName}] 未找到 [ExcelSheet] 显式注册");
                     result.Success = false;
                     continue;
                 }
 
+                var classType = schema.DataType;
                 var genericList = TypeConvert.CreateGeneric(typeof(List<>), classType);
                 var list = (IList)genericList;
                 var heads = new List<int>();
@@ -470,7 +497,6 @@ namespace ExcelExtruder
                 var parseErrors = new List<string>();
                 Dictionary<string, object> oldDataMap = null;
                 var newDataMap = new Dictionary<string, ParsedRowData>(StringComparer.Ordinal);
-                FieldInfo primaryKeyField = null;
                 var headerFound = false;
                 var dataRowIndex = 0;
                 var sheetHasFatalError = false;
@@ -491,7 +517,7 @@ namespace ExcelExtruder
                         }
 
                         headerFound = true;
-                        if (!TryReadHeader(classType, edr, workbookRelativePath, sheetName, heads, headNames))
+                        if (!TryReadHeader(schema, edr, workbookRelativePath, heads, headNames))
                             sheetHasFatalError = true;
 
                         var headerRow = edr.Select(heads.ToArray());
@@ -502,11 +528,13 @@ namespace ExcelExtruder
 
                         CheckNoFormulaFields(workbookPath, sheetName, classType, heads, headNames, validationErrors);
 
-                        if (!TryResolvePrimaryKeyField(sheetName, classType, headNames, out primaryKeyField))
+                        if (!headNames.Contains(schema.KeyFieldName))
+                        {
+                            LogError($"[{workbookRelativePath}/{sheetName}] 表头中缺少 schema 主键字段 {schema.KeyFieldName}");
                             sheetHasFatalError = true;
+                        }
 
-                        if (primaryKeyField != null)
-                            oldDataMap = LoadBaselineFromBin(sheetName, classType, primaryKeyField);
+                        oldDataMap = LoadBaselineFromBin(schema);
 
                         continue;
                     }
@@ -530,27 +558,29 @@ namespace ExcelExtruder
 
                     validationErrors.AddRange(m_validator.Validate(obj, classType, sheetName, dataRowIndex, rawValues));
 
-                    if (primaryKeyField != null)
+                    var pk = GetPrimaryKeyValue(schema.KeyField, obj);
+                    if (string.IsNullOrEmpty(pk))
                     {
-                        var pk = GetPrimaryKeyValue(primaryKeyField, obj);
-                        if (!string.IsNullOrEmpty(pk))
+                        parseErrors.Add($"[{workbookRelativePath}/{sheetName}] 第{dataRowIndex}行主键为空: {schema.KeyFieldName}");
+                        sheetHasFatalError = true;
+                    }
+                    else
+                    {
+                        if (newDataMap.ContainsKey(pk))
                         {
-                            if (newDataMap.ContainsKey(pk))
+                            parseErrors.Add($"[{workbookRelativePath}/{sheetName}] 第{dataRowIndex}行主键重复: {schema.KeyFieldName} = {pk}");
+                            sheetHasFatalError = true;
+                        }
+                        else
+                        {
+                            newDataMap[pk] = new ParsedRowData
                             {
-                                parseErrors.Add($"[{workbookRelativePath}/{sheetName}] 第{dataRowIndex}行主键重复: {primaryKeyField.Name} = {pk}");
-                                sheetHasFatalError = true;
-                            }
-                            else
-                            {
-                                newDataMap[pk] = new ParsedRowData
-                                {
-                                    RowIndex = dataRowIndex,
-                                    Data = obj
-                                };
+                                RowIndex = dataRowIndex,
+                                Data = obj
+                            };
 
-                                if (oldDataMap != null && !oldDataMap.ContainsKey(pk))
-                                    validationErrors.AddRange(m_validator.ValidateNewRow(classType, sheetName, dataRowIndex, obj, oldDataMap));
-                            }
+                            if (oldDataMap != null && !oldDataMap.ContainsKey(pk))
+                                validationErrors.AddRange(m_validator.ValidateNewRow(classType, sheetName, dataRowIndex, obj, oldDataMap));
                         }
                     }
 
@@ -565,8 +595,8 @@ namespace ExcelExtruder
 
                 diffWarnings.AddRange(PerformDiffValidation(sheetName, classType, oldDataMap, newDataMap));
 
-                // foreach (var parseError in parseErrors)
-                //     LogError(parseError);
+                foreach (var parseError in parseErrors)
+                    LogError(parseError);
 
                 if (validationErrors.Count > 0)
                 {
@@ -593,7 +623,10 @@ namespace ExcelExtruder
                 result.Sheets.Add(new SheetConvertResult
                 {
                     SheetName = sheetName,
-                    TypeName = classType.FullName ?? classType.Name,
+                    TypeName = schema.TypeName,
+                    OutputName = schema.OutputName,
+                    KeyFieldName = schema.KeyFieldName,
+                    KeyTypeName = schema.KeyTypeName,
                     CsvContent = csvBuilder.ToString(),
                     BinaryData = SerializeToBytes(genericList)
                 });
@@ -602,13 +635,14 @@ namespace ExcelExtruder
             return result;
         }
 
-        private bool TryReadHeader(Type classType, DbDataReader row, string workbookPath, string sheetName, List<int> heads, List<string> headNames)
+        private bool TryReadHeader(ExcelSheetSchema schema, DbDataReader row, string workbookPath, List<int> heads, List<string> headNames)
         {
             heads.Clear();
             headNames.Clear();
 
             var duplicates = new HashSet<string>(StringComparer.Ordinal);
             var success = true;
+            var classType = schema.DataType;
 
             for (int i = 0; i < row.FieldCount; i++)
             {
@@ -620,14 +654,14 @@ namespace ExcelExtruder
 
                 if (!duplicates.Add(fieldName))
                 {
-                    LogError($"[{workbookPath}/{sheetName}] 表头字段重复: {fieldName}");
+                    LogError($"[{workbookPath}/{schema.SheetName}] 表头字段重复: {fieldName}");
                     success = false;
                     continue;
                 }
 
                 if (GetPublicInstanceField(classType, fieldName) == null)
                 {
-                    LogError($"[{workbookPath}/{sheetName}] 找不到字段: {fieldName}，对应类型 {classType.FullName}");
+                    LogError($"[{workbookPath}/{schema.SheetName}] 找不到字段: {fieldName}，对应类型 {classType.FullName}");
                     success = false;
                     continue;
                 }
@@ -638,84 +672,30 @@ namespace ExcelExtruder
 
             if (headNames.Count == 0)
             {
-                LogError($"[{workbookPath}/{sheetName}] 未解析到任何可导出字段");
+                LogError($"[{workbookPath}/{schema.SheetName}] 未解析到任何可导出字段");
+                success = false;
+            }
+
+            if (!headNames.Contains(schema.KeyFieldName))
+            {
+                LogError($"[{workbookPath}/{schema.SheetName}] 未包含 schema 注册的主键字段: {schema.KeyFieldName}");
                 success = false;
             }
 
             return success;
         }
 
-        private bool TryResolvePrimaryKeyField(string sheetName, Type classType, List<string> headNames, out FieldInfo primaryKeyField)
-        {
-            primaryKeyField = null;
-            if (headNames == null || headNames.Count == 0)
-            {
-                LogError($"[{sheetName}] 表头为空，无法解析主键字段");
-                return false;
-            }
-
-            var markedFields = new List<FieldInfo>();
-            var uniqueFields = new List<FieldInfo>();
-
-            foreach (var headName in headNames)
-            {
-                var field = GetPublicInstanceField(classType, headName);
-                if (field == null)
-                    continue;
-
-                if (field.GetCustomAttribute<PrimaryKeyAttribute>() != null)
-                    markedFields.Add(field);
-
-                if (field.GetCustomAttribute<UniqueAttribute>() != null)
-                    uniqueFields.Add(field);
-            }
-
-            if (markedFields.Count > 1)
-            {
-                LogError($"[{sheetName}] 存在多个 [PrimaryKey] 字段，请只保留一个");
-                return false;
-            }
-
-            if (markedFields.Count == 1)
-            {
-                primaryKeyField = markedFields[0];
-                return true;
-            }
-
-            var firstField = GetPublicInstanceField(classType, headNames[0]);
-            if (firstField != null && firstField.GetCustomAttribute<UniqueAttribute>() != null)
-            {
-                primaryKeyField = firstField;
-                Log($"[{sheetName}] 未标记 [PrimaryKey]，回退使用第一列唯一字段 {primaryKeyField.Name}");
-                return true;
-            }
-
-            if (uniqueFields.Count == 1)
-            {
-                primaryKeyField = uniqueFields[0];
-                Log($"[{sheetName}] 未标记 [PrimaryKey]，回退使用唯一字段 {primaryKeyField.Name}");
-                return true;
-            }
-
-            if (uniqueFields.Count > 1)
-                Log($"[{sheetName}] 存在多个 [Unique] 字段且未标记 [PrimaryKey]，跳过 Diff/新增校验");
-            else
-                Log($"[{sheetName}] 未找到主键字段，跳过 Diff/新增校验");
-
-            return true;
-        }
-
-        private Dictionary<string, object> LoadBaselineFromBin(string sheetName, Type classType, FieldInfo pkField)
+        private Dictionary<string, object> LoadBaselineFromBin(ExcelSheetSchema schema)
         {
             var dataMap = new Dictionary<string, object>(StringComparer.Ordinal);
-            var binPath = GetBinOutputPath(sheetName);
+            var binPath = GetBinOutputPath(schema.OutputName);
             if (!File.Exists(binPath))
                 return dataMap;
 
             try
             {
                 var bin = File.ReadAllBytes(binPath);
-                var listType = typeof(List<>).MakeGenericType(classType);
+                var listType = typeof(List<>).MakeGenericType(schema.DataType);
                 var oldList = MemoryPackSerializer.Deserialize(listType, bin) as IList;
                 if (oldList == null)
                     return dataMap;
@@ -725,14 +705,14 @@ namespace ExcelExtruder
                     if (item == null)
                         continue;
 
-                    var pkValue = GetPrimaryKeyValue(pkField, item);
+                    var pkValue = GetPrimaryKeyValue(schema.KeyField, item);
                     if (!string.IsNullOrEmpty(pkValue))
                         dataMap[pkValue] = item;
                 }
             }
             catch (Exception e)
             {
-                Log($"加载基线数据 {sheetName}.bytes 失败: {e.Message}");
+                Log($"加载基线数据 {schema.OutputName}.bytes 失败: {e.Message}");
             }
 
             return dataMap;
@@ -1148,8 +1128,16 @@ namespace ExcelExtruder
 
                     foreach (var sheet in item.Value.Sheets)
                     {
-                        if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName) || string.IsNullOrWhiteSpace(sheet.TypeName))
-                            continue;
+                        if (sheet == null
+                            || string.IsNullOrWhiteSpace(sheet.SheetName)
+                            || string.IsNullOrWhiteSpace(sheet.TypeName)
+                            || string.IsNullOrWhiteSpace(sheet.OutputName)
+                            || string.IsNullOrWhiteSpace(sheet.KeyFieldName)
+                            || string.IsNullOrWhiteSpace(sheet.KeyTypeName))
+                        {
+                            LogError($"StaticDataModel 生成失败，{item.Key} 中存在缺少 schema 元数据的 Sheet。请先重新执行 Serialize Excels");
+                            return;
+                        }
 
                         if (!duplicates.Add(sheet.SheetName))
                         {
@@ -1160,7 +1148,10 @@ namespace ExcelExtruder
                         allSheets.Add(new ExcelSheetInfo
                         {
                             SheetName = sheet.SheetName,
-                            TypeName = sheet.TypeName
+                            TypeName = sheet.TypeName,
+                            OutputName = sheet.OutputName,
+                            KeyFieldName = sheet.KeyFieldName,
+                            KeyTypeName = sheet.KeyTypeName
                         });
                     }
                 }
@@ -1197,13 +1188,19 @@ namespace ExcelExtruder
             sb.AppendLine("{");
 
             foreach (var sheet in sheets)
+            {
                 sb.AppendLine($"    public List<{GetCodeTypeName(sheet.TypeName)}> {GetCollectionPropertyName(sheet.SheetName)} {{ get; private set; }}");
+                sb.AppendLine($"    public Dictionary<{GetCodeTypeName(sheet.KeyTypeName)}, {GetCodeTypeName(sheet.TypeName)}> {GetIndexPropertyName(sheet.SheetName)} {{ get; private set; }}");
+            }
 
             sb.AppendLine();
             sb.AppendLine("    public void Init()");
             sb.AppendLine("    {");
             foreach (var sheet in sheets)
-                sb.AppendLine($"        {GetCollectionPropertyName(sheet.SheetName)} = MemoryPackDeserialize<List<{GetCodeTypeName(sheet.TypeName)}>>(\"{sheet.SheetName}\");");
+            {
+                sb.AppendLine($"        {GetCollectionPropertyName(sheet.SheetName)} = MemoryPackDeserialize<List<{GetCodeTypeName(sheet.TypeName)}>>(\"{sheet.OutputName}\");");
+                sb.AppendLine($"        {GetIndexPropertyName(sheet.SheetName)} = BuildIndex({GetCollectionPropertyName(sheet.SheetName)}, item => item.{sheet.KeyFieldName}, \"{sheet.SheetName}\", \"{sheet.KeyFieldName}\");");
+            }
             sb.AppendLine("    }");
 
             sb.AppendLine();
@@ -1217,6 +1214,22 @@ namespace ExcelExtruder
             sb.AppendLine("        }");
             sb.AppendLine();
             sb.AppendLine("        return MemoryPackSerializer.Deserialize<T>(asset.bytes);");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            sb.AppendLine("    private Dictionary<TKey, TValue> BuildIndex<TKey, TValue>(List<TValue> items, System.Func<TValue, TKey> keySelector, string sheetName, string keyFieldName)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        var dict = new Dictionary<TKey, TValue>();");
+            sb.AppendLine("        if (items == null)");
+            sb.AppendLine("            return dict;");
+            sb.AppendLine();
+            sb.AppendLine("        foreach (var item in items)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var key = keySelector(item);");
+            sb.AppendLine("            if (!dict.TryAdd(key, item))");
+            sb.AppendLine("                Debug.LogError($\"StaticData key duplicated: {sheetName}.{keyFieldName} = {key}\");");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        return dict;");
             sb.AppendLine("    }");
             sb.AppendLine("}");
 
@@ -1235,6 +1248,11 @@ namespace ExcelExtruder
                 return identifier + "List";
 
             return identifier + "s";
+        }
+
+        private static string GetIndexPropertyName(string sheetName)
+        {
+            return GetCollectionPropertyName(sheetName) + "ByKey";
         }
 
         private static string SanitizeIdentifier(string value)

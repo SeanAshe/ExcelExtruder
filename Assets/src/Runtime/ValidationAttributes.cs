@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// 校验 Attribute 的通用接口
@@ -79,3 +80,116 @@ public class RangeAttribute : Attribute, IValidationAttribute
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public class NoFormulaAttribute : Attribute { }
+
+/// <summary>
+/// Diff 校验接口，仅在数据发生改变时触发
+/// </summary>
+public interface IDiffValidationAttribute
+{
+    /// <summary>
+    /// 执行差异校验
+    /// </summary>
+    /// <param name="oldValue">旧的解析值</param>
+    /// <param name="newValue">新的解析值</param>
+    /// <returns>如果校验失败返回错误信息，通过返回 null</returns>
+    string ValidateDiff(object oldValue, object newValue);
+}
+
+/// <summary>
+/// 标记字段建议不可被修改。只要旧数据存在该字段，新数据如果发生变动则会提示警告。
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public class FixedAttribute : Attribute, IDiffValidationAttribute
+{
+    public string ValidateDiff(object oldValue, object newValue)
+    {
+        if (!object.Equals(oldValue, newValue))
+        {
+            return $"该字段标记了 [Fixed]，请谨慎修改。旧值: {oldValue}, 新值: {newValue}";
+        }
+        return null;
+    }
+}
+
+/// <summary>
+/// 标记数值字段的变化幅度不能超过指定的百分比。
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public class MaxChangePercentAttribute : Attribute, IDiffValidationAttribute
+{
+    public float MaxPercent { get; }
+
+    /// <summary>
+    /// </summary>
+    /// <param name="maxPercent">最大允许变化比例，例如 0.5 表示 50%</param>
+    public MaxChangePercentAttribute(float maxPercent)
+    {
+        MaxPercent = maxPercent;
+    }
+
+    public string ValidateDiff(object oldValue, object newValue)
+    {
+        try
+        {
+            double oldNum = Convert.ToDouble(oldValue);
+            double newNum = Convert.ToDouble(newValue);
+
+            if (Math.Abs(oldNum) < 1e-6) return null; // 旧值为0时，跳过百分比校验，或者可以根据业务需求报错
+
+            var change = Math.Abs((newNum - oldNum) / oldNum);
+            if (change > MaxPercent)
+            {
+                return $"该字段标记了变化不能超过 {MaxPercent:P0}，旧值({oldNum}) -> 新值({newNum}) 变化了 {change:P2}";
+            }
+        }
+        catch { }
+
+        return null;
+    }
+}
+
+/// <summary>
+/// 上下文校验接口，用于跨行校验（如查重）
+/// </summary>
+public interface IContextValidationAttribute
+{
+    /// <summary>
+    /// 执行上下文校验
+    /// </summary>
+    string ValidateContext(string fieldName, string value, Dictionary<string, HashSet<string>> cache);
+}
+
+/// <summary>
+/// 标记字段在整列中必须唯一，不能有重复值。
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public class UniqueAttribute : Attribute, IContextValidationAttribute
+{
+    public string ValidateContext(string fieldName, string value, Dictionary<string, HashSet<string>> cache)
+    {
+        if (string.IsNullOrEmpty(value)) return null;
+
+        if (!cache.TryGetValue(fieldName, out var set))
+        {
+            set = new HashSet<string>();
+            cache[fieldName] = set;
+        }
+
+        if (!set.Add(value))
+        {
+            return $"该字段标记了 [Unique]，发现重复的值: {value}";
+        }
+        return null;
+    }
+}
+
+/// <summary>
+/// 新增行校验接口，仅在数据行被判定为“新增”时触发
+/// </summary>
+public interface INewRowValidationAttribute
+{
+    /// <summary>
+    /// 执行新增行专属校验
+    /// </summary>
+    string ValidateNewRow(string fieldName, object newValue, Dictionary<string, object> oldDataMap);
+}

@@ -40,6 +40,19 @@ namespace ExcelExtruder
             = new Dictionary<Type, List<FieldValidationInfo>>();
 
         /// <summary>
+        /// 去重缓存，服务于 IContextValidationAttribute
+        /// </summary>
+        private readonly Dictionary<string, HashSet<string>> _uniqueCache = new Dictionary<string, HashSet<string>>();
+
+        /// <summary>
+        /// 清理缓存上下文（每次解析新表前调用）
+        /// </summary>
+        public void ClearContext()
+        {
+            _uniqueCache.Clear();
+        }
+
+        /// <summary>
         /// 校验单个对象的所有字段
         /// </summary>
         public List<ValidationError> Validate(
@@ -97,6 +110,23 @@ namespace ExcelExtruder
                         });
                     }
                 }
+
+                // 通过 IContextValidationAttribute 接口调用全局去重校验
+                foreach (var attr in validation.ContextValidators)
+                {
+                    var errorMsg = attr.ValidateContext(validation.Field.Name, rawValue, _uniqueCache);
+                    if (errorMsg != null)
+                    {
+                        errors.Add(new ValidationError
+                        {
+                            SheetName = sheetName,
+                            RowIndex = rowIndex,
+                            FieldName = validation.Field.Name,
+                            RawValue = rawValue ?? "(null)",
+                            Message = errorMsg
+                        });
+                    }
+                }
             }
 
             return errors;
@@ -116,26 +146,97 @@ namespace ExcelExtruder
             foreach (var field in fields)
             {
                 var validators = new List<IValidationAttribute>();
+                var diffValidators = new List<IDiffValidationAttribute>();
+                var contextValidators = new List<IContextValidationAttribute>();
+                var newRowValidators = new List<INewRowValidationAttribute>();
 
-                // 收集所有实现了 IValidationAttribute 的 Attribute
+                // 收集所有校验相关的 Attribute
                 foreach (var attr in field.GetCustomAttributes(true))
                 {
                     if (attr is IValidationAttribute validationAttr)
                         validators.Add(validationAttr);
+                    if (attr is IDiffValidationAttribute diffAttr)
+                        diffValidators.Add(diffAttr);
+                    if (attr is IContextValidationAttribute contextAttr)
+                        contextValidators.Add(contextAttr);
+                    if (attr is INewRowValidationAttribute newRowAttr)
+                        newRowValidators.Add(newRowAttr);
                 }
 
-                if (validators.Count > 0)
+                if (validators.Count > 0 || diffValidators.Count > 0 || contextValidators.Count > 0 || newRowValidators.Count > 0)
                 {
                     result.Add(new FieldValidationInfo
                     {
                         Field = field,
-                        Validators = validators
+                        Validators = validators,
+                        DiffValidators = diffValidators,
+                        ContextValidators = contextValidators,
+                        NewRowValidators = newRowValidators
                     });
                 }
             }
 
             _cache[type] = result;
             return result;
+        }
+
+        /// <summary>
+        /// 对单个字段执行 Diff 校验
+        /// </summary>
+        public List<string> ValidateDiff(Type classType, string fieldName, object oldValue, object newValue)
+        {
+            var validations = GetFieldValidations(classType);
+            var fieldValidation = validations.Find(v => v.Field.Name == fieldName);
+            if (fieldValidation == null || fieldValidation.DiffValidators == null) return null;
+
+            var errors = new List<string>();
+            foreach (var attr in fieldValidation.DiffValidators)
+            {
+                var errorMsg = attr.ValidateDiff(oldValue, newValue);
+                if (errorMsg != null)
+                {
+                    errors.Add(errorMsg);
+                }
+            }
+            return errors.Count > 0 ? errors : null;
+        }
+
+        /// <summary>
+        /// 对单行（判定为新增的行）执行专属校验
+        /// </summary>
+        public List<ValidationError> ValidateNewRow(
+            Type classType,
+            string sheetName,
+            int rowIndex,
+            object newObj,
+            Dictionary<string, object> oldDataMap)
+        {
+            var errors = new List<ValidationError>();
+            var validations = GetFieldValidations(classType);
+
+            foreach (var validation in validations)
+            {
+                if (validation.NewRowValidators.Count == 0) continue;
+                
+                var newValue = validation.Field.GetValue(newObj);
+
+                foreach (var attr in validation.NewRowValidators)
+                {
+                    var errorMsg = attr.ValidateNewRow(validation.Field.Name, newValue, oldDataMap);
+                    if (errorMsg != null)
+                    {
+                        errors.Add(new ValidationError
+                        {
+                            SheetName = sheetName,
+                            RowIndex = rowIndex,
+                            FieldName = validation.Field.Name,
+                            RawValue = newValue?.ToString() ?? "(null)",
+                            Message = errorMsg
+                        });
+                    }
+                }
+            }
+            return errors;
         }
 
         /// <summary>
@@ -180,6 +281,9 @@ namespace ExcelExtruder
         {
             public FieldInfo Field;
             public List<IValidationAttribute> Validators;
+            public List<IDiffValidationAttribute> DiffValidators;
+            public List<IContextValidationAttribute> ContextValidators;
+            public List<INewRowValidationAttribute> NewRowValidators;
         }
     }
 }

@@ -183,12 +183,17 @@ namespace ExcelExtruder
             do
             {
                 var sheetName = edr.WorksheetName;
+                m_validator.ClearContext();
                 sheets.Add(sheetName);
                 var heads = new List<int>();
                 var headNames = new List<string>();
                 Type classType = m_typeConvert.TryGetType(sheetName);
                 object genericList = TypeConvert.CreateGeneric(typeof(List<>), classType);
                 var list = (IList)genericList;
+
+                // 1. 准备字典，用于 Diff 校验
+                Dictionary<string, object> oldDataMap = null;
+                var newDataMap = new Dictionary<string, object>();
 
                 using var cdw = new StreamWriter(CSV_PATH + sheetName + ".csv", false);
                 int dataRowIndex = 0;
@@ -218,6 +223,9 @@ namespace ExcelExtruder
                         {
                             formulaScanned = true;
                             CheckNoFormulaFields(EXCELRES_PATH + fileName, sheetName, classType, heads, headNames, allErrors);
+
+                            // 此时已有正确的 headNames，可以根据第一列提取主键并反序列化旧数据
+                            oldDataMap = headNames.Count > 0 ? LoadBaselineFromBin(classType, headNames[0]) : new Dictionary<string, object>();
                         }
                     }
                     var row = edr.Select(heads.ToArray());
@@ -240,8 +248,24 @@ namespace ExcelExtruder
                     var errors = m_validator.Validate(obj, classType, sheetName, dataRowIndex, rawValues);
                     allErrors.AddRange(errors);
 
+                    string pk = row.GetString(0);
+                    if (!string.IsNullOrEmpty(pk))
+                    {
+                        newDataMap[pk] = obj;
+
+                        // 判定是否是新增行，如果是，则执行新增行的全局验证（如 [NoReuse]）
+                        if (oldDataMap != null && !oldDataMap.ContainsKey(pk))
+                        {
+                            var newRowErrors = m_validator.ValidateNewRow(classType, sheetName, dataRowIndex, obj, oldDataMap);
+                            allErrors.AddRange(newRowErrors);
+                        }
+                    }
+
                     list.Add(obj);
                 }
+
+                // 2. 循环结束后，执行后置的 Diff 差异校验
+                PerformDiffValidation(sheetName, classType, oldDataMap, newDataMap, allErrors);
 
                 // 统一输出所有校验错误
                 if (allErrors.Count > 0)
@@ -258,6 +282,93 @@ namespace ExcelExtruder
             } while(edr.NextResult());
 
             return new ExcelConvertResult { FileName = fileName, Sheets = sheets };
+        }
+
+        /// <summary>
+        /// 从 StaticData 目录加载对应类型的 .bytes 文件，反序列化作为基线数据
+        /// key: 主键 (导出后的第一列的值), value: 反序列化后的旧对象
+        /// </summary>
+        private Dictionary<string, object> LoadBaselineFromBin(Type classType, string pkFieldName)
+        {
+            var dataMap = new Dictionary<string, object>();
+            string binPath = BIN_PATH + classType.ToString() + ".bytes";
+            if (!File.Exists(binPath)) return dataMap;
+
+            try
+            {
+                var bin = File.ReadAllBytes(binPath);
+                var listType = typeof(List<>).MakeGenericType(classType);
+                var oldList = MemoryPackSerializer.Deserialize(listType, bin) as IList;
+                
+                if (oldList != null)
+                {
+                    var pkField = classType.GetField(pkFieldName);
+                    if (pkField == null) return dataMap;
+
+                    foreach (var item in oldList)
+                    {
+                        if (item == null) continue;
+                        var pkValue = pkField.GetValue(item)?.ToString();
+                        if (!string.IsNullOrEmpty(pkValue))
+                        {
+                            dataMap[pkValue] = item;
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log($"加载基线数据 {classType.Name}.bytes 失败: {e.Message}");
+            }
+            return dataMap;
+        }
+
+        /// <summary>
+        /// 执行新老数据的 Diff 差异校验（支持插行、插列）
+        /// </summary>
+        private void PerformDiffValidation(
+            string sheetName, Type classType,
+            Dictionary<string, object> oldDataMap,
+            Dictionary<string, object> newDataMap,
+            List<ValidationError> allErrors)
+        {
+            if (oldDataMap == null || oldDataMap.Count == 0 || newDataMap.Count == 0) return;
+
+            int rowIndex = 0; 
+            var fields = classType.GetFields(BindingFlags.Public | BindingFlags.Instance);
+
+            foreach (var newKvp in newDataMap)
+            {
+                rowIndex++;
+                string pk = newKvp.Key;
+                object newObj = newKvp.Value;
+
+                // 插行：旧数据中没有，视为新增行，安全跳过 Diff
+                if (!oldDataMap.TryGetValue(pk, out var oldObj)) continue;
+
+                // 发生更新：对比两行数据
+                foreach (var field in fields)
+                {
+                    object oldValue = field.GetValue(oldObj);
+                    object newValue = field.GetValue(newObj);
+
+                    var diffErrors = m_validator.ValidateDiff(classType, field.Name, oldValue, newValue);
+                    if (diffErrors != null)
+                    {
+                        foreach (var errorMsg in diffErrors)
+                        {
+                            allErrors.Add(new ValidationError
+                            {
+                                SheetName = sheetName,
+                                RowIndex = rowIndex,
+                                FieldName = field.Name,
+                                RawValue = newValue?.ToString() ?? "",
+                                Message = $"[Diff变更] {errorMsg}"
+                            });
+                        }
+                    }
+                }
+            }
         }
 
         protected void Write2Csv(StreamWriter ws, DbDataReader row)

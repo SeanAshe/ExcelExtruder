@@ -17,6 +17,6 @@ public partial class sCityVO
 public partial class sCityLevelVO
 {
     public int m_level;
-    public int m_exp;
+    [Required][Range(0, int.MaxValue)][NoFormula] public int m_exp;
     public int m_houseLimit;
 }

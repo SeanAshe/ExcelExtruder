@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 
 namespace ExcelExtruder
@@ -12,6 +14,28 @@ namespace ExcelExtruder
         private Dictionary<string, Type> m_foundType;
 
         public static Dictionary<Type, Delegate> TryParseDelegates = new Dictionary<Type, Delegate>();
+
+        /// <summary>
+        /// 内置类型解析器（零反射），覆盖所有常见值类型
+        /// 返回解析后的 object，解析失败返回 null
+        /// </summary>
+        private static readonly Dictionary<Type, Func<string, object>> s_builtinParsers
+            = new Dictionary<Type, Func<string, object>>
+        {
+            { typeof(int),     s => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(uint),    s => uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(long),    s => long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(ulong),   s => ulong.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(short),   s => short.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(ushort),  s => ushort.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(byte),    s => byte.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(sbyte),   s => sbyte.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(float),   s => float.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(double),  s => double.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(decimal), s => decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null },
+            { typeof(bool),    s => bool.TryParse(s, out var v) ? v : null },
+            { typeof(char),    s => s.Length == 1 ? s[0] : null },
+        };
 
         public string m_currentPlacement;
         public uint m_currentPlacementId;
@@ -115,15 +139,11 @@ namespace ExcelExtruder
         }
 
         /// <summary>
-        /// 动态创建Array
+        /// 动态创建指定类型的数组（无反射）
         /// </summary>
-        /// <param name="innerType"></param>
-        /// <param name="args"></param>
-        /// <returns></returns>
-        public static object CreateArray(Type innerType, params object[] args)
+        public static Array CreateArray(Type innerType, int length)
         {
-            Type specificType = innerType.MakeArrayType();
-            return Activator.CreateInstance(specificType, args);
+            return Array.CreateInstance(innerType, length);
         }
 
         /// <summary>
@@ -233,49 +253,56 @@ namespace ExcelExtruder
 
         private bool TryParse2Object(Type type, string value, out object result)
         {
+            var trimmed = Trim(value);
+
+            // ① 内置类型快速路径（零反射）
+            if (s_builtinParsers.TryGetValue(type, out var parser))
+            {
+                result = parser(trimmed);
+                if (result != null) return true;
+                Error($"[TryParse2Builtin] 解析失败: [{value}] => {type.FullName}");
+                return false;
+            }
+
+            // ② 自定义类型：通过缓存的 MethodInfo 调用 TryParse
             MethodInfo mi = GetMethodInfo(type, "TryParse");
             if (mi != null)
             {
-                // 有TryParse方法，直接调用
-                var parameters = new object[] { Trim(value), Activator.CreateInstance(type) };
+                var parameters = new object[] { trimmed, Activator.CreateInstance(type) };
                 if ((bool)mi.Invoke(null, parameters) == true)
                 {
-                    // 返回成功
                     result = parameters[1];
                     return true;
                 }
                 else
                 {
-                    // 返回失败
                     Error(string.Format("[TryParse2Object] TryParse method return fail: [{1}] => {0}", type.FullName, value));
                     result = null;
                     return false;
                 }
             }
-            else if (TryParseDelegates.TryGetValue(type, out var del))
+
+            // ③ 自定义类型：通过注册的委托调用 TryParse
+            if (TryParseDelegates.TryGetValue(type, out var del))
             {
-                var parameters = new object[] { Trim(value), Activator.CreateInstance(type) };
+                var parameters = new object[] { trimmed, Activator.CreateInstance(type) };
                 if ((bool)del.DynamicInvoke(parameters) == true)
                 {
-                    // 返回成功
                     result = parameters[1];
                     return true;
                 }
                 else
                 {
-                    // 返回失败
-                    Error(string.Format("[TryParse2Object] TryParse method return fail: [{1}] => {0}", type.FullName, value));
+                    Error(string.Format("[TryParse2Object] TryParse delegate return fail: [{1}] => {0}", type.FullName, value));
                     result = null;
                     return false;
                 }
             }
-            else
-            {
-                // 没有TryParse方法
-                Error("[TryParse2Object] Can't find the TryParse method of type: " + type.FullName);
-                result = null;
-                return false;
-            }
+
+            // ④ 无法解析
+            Error("[TryParse2Object] Can't find the TryParse method of type: " + type.FullName);
+            result = null;
+            return false;
         }
 
         /// <summary>
@@ -326,8 +353,15 @@ namespace ExcelExtruder
         {
             var innerType = type.GenericTypeArguments[0];
             result = CreateGeneric(genericType, innerType);
+
+            // 对实现 IList 的集合（如 List<T>），直接使用接口调用，无需反射
+            if (result is IList list)
+                return PushInner(value, innerType, item => list.Add(item));
+
+            // 其他集合（HashSet/Queue/Stack）仍需反射获取方法
             var addMethodInfo = result.GetType().GetMethod(addMethodName);
-            return PushInner(value, innerType, result, addMethodInfo);
+            var collection = result;
+            return PushInner(value, innerType, item => addMethodInfo.Invoke(collection, new[] { item }));
         }
 
         private bool Parse2LinkedList(Type type, string value, out object result)
@@ -339,14 +373,22 @@ namespace ExcelExtruder
             foreach (var method in allMethod)
             {
                 if (method.Name == "AddLast" && method.ReturnType.FullName.IndexOf("LinkedListNode") != -1)
-                    return PushInner(value, innerType, result, method);
+                {
+                    var linkedList = result;
+                    var addLastMethod = method;
+                    return PushInner(value, innerType, item => addLastMethod.Invoke(linkedList, new[] { item }));
+                }
             }
 
             result = null;
             return false;
         }
 
-        private bool PushInner(string str, Type innerType, object generic, MethodInfo method)
+        /// <summary>
+        /// 向集合中逐个添加解析后的元素
+        /// 使用 Action 委托替代 MethodInfo.Invoke，调用方决定添加方式
+        /// </summary>
+        private bool PushInner(string str, Type innerType, Action<object> addAction)
         {
             bool allSuccess = true;
 
@@ -357,7 +399,7 @@ namespace ExcelExtruder
                 m_currentArrayIndex = i;
                 object innerResult = null;
                 if (TryParse(innerType, strs[i], out innerResult))
-                    method.Invoke(generic, new object[] { innerResult });
+                    addAction(innerResult);
                 else
                     allSuccess = false;
             }
@@ -371,7 +413,8 @@ namespace ExcelExtruder
             var valueType = type.GenericTypeArguments[1];
 
             object generic = CreateDictionary(keyType, valueType);
-            var addMethodInfo = generic.GetType().GetMethod("Add");
+            // 使用 IDictionary 接口直接添加，无需反射
+            var dict = (IDictionary)generic;
 
             var groups = CutStringByGroup(Trim(value));
             bool allSuccess = true;
@@ -397,7 +440,7 @@ namespace ExcelExtruder
                 object valueResult = null;
 
                 if (TryParse(keyType, keyStr, out keyResult) && TryParse(valueType, valueStr, out valueResult))
-                    addMethodInfo.Invoke(generic, new object[] { keyResult, valueResult });
+                    dict.Add(keyResult, valueResult);
                 else
                     allSuccess = false;
             }
@@ -411,8 +454,8 @@ namespace ExcelExtruder
             var innerType = type.GetElementType();
 
             string[] strs = CutStringByGroup(value);
-            object array = CreateArray(innerType, new object[] { strs.Length });
-            MethodInfo setValueMethodInfo = array.GetType().GetMethod("SetValue", new Type[] { typeof(object), typeof(int) });
+            // 直接使用 Array.CreateInstance + Array.SetValue，无需反射
+            Array array = CreateArray(innerType, strs.Length);
 
             bool allSuccess = true;
             for (int i = 0; i < strs.Length; i++)
@@ -420,7 +463,7 @@ namespace ExcelExtruder
                 m_currentArrayIndex = i;
                 object innerResult = null;
                 if (TryParse(innerType, strs[i], out innerResult))
-                    setValueMethodInfo.Invoke(array, new object[] { innerResult, i });
+                    array.SetValue(innerResult, i);
                 else
                     allSuccess = false;
             }
@@ -505,16 +548,15 @@ namespace ExcelExtruder
             return str;
         }
 
+        /// <summary>
+        /// 从泛型类型中提取不带 arity 后缀的类型名
+        /// 例如: List`1 → List, Dictionary`2 → Dictionary
+        /// </summary>
         public static string GetGenericTypeRealName(Type type)
         {
-            var fullName = type.Name;
-            const string head = "System.Collections.Generic.";
-            var cutName = fullName.Substring(head.Length);
-
-            int index = cutName.IndexOf('`');
-            cutName = cutName.Substring(0, index);
-
-            return cutName;
+            var name = type.Name; // 例如: "List`1", "Dictionary`2"
+            int index = name.IndexOf('`');
+            return index >= 0 ? name.Substring(0, index) : name;
         }
     }
 }

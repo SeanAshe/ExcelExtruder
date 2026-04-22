@@ -4,17 +4,27 @@ using ExcelExtruder;
 
 public class EditorUI : EditorWindow
 {
-    [MenuItem("Tools/Excel/Serialize Excels", false, 0)]
-    static void OpenLoadingScene()
+    [MenuItem("Tools/Excel/Serialize Excels (增量)", false, 0)]
+    static void SerializeExcelsIncremental()
     {
         var typeConvert = new TypeConvert(EVENT_ERROR_LOG);
         var excelSerialize = new ExcelSerialize();
         excelSerialize.Init(typeConvert, EVENT_END_PROGRESS, EVENT_PROGRESS, EVENT_ERROR_LOG, EVENT_LOG);
-        excelSerialize.SerializeAllExcel();
+        excelSerialize.SerializeAllExcel(forceAll: false);
         EditorUtility.ClearProgressBar();
     }
 
-    [MenuItem("Tools/Excel/Generate StaticDataModel", false, 1)]
+    [MenuItem("Tools/Excel/Serialize Excels (全量重建)", false, 1)]
+    static void SerializeExcelsForceAll()
+    {
+        var typeConvert = new TypeConvert(EVENT_ERROR_LOG);
+        var excelSerialize = new ExcelSerialize();
+        excelSerialize.Init(typeConvert, EVENT_END_PROGRESS, EVENT_PROGRESS, EVENT_ERROR_LOG, EVENT_LOG);
+        excelSerialize.SerializeAllExcel(forceAll: true);
+        EditorUtility.ClearProgressBar();
+    }
+
+    [MenuItem("Tools/Excel/Generate StaticDataModel", false, 2)]
     static void GenerateStaticDataModel()
     {
         var dataModelGenerate = new DataModelGenerate();
@@ -22,6 +32,7 @@ public class EditorUI : EditorWindow
         dataModelGenerate.GenerateStaticDataModel();
         EditorUtility.ClearProgressBar();
     }
+
     private static void EVENT_LOG(string log) => Debug.Log(log);
     private static void EVENT_ERROR_LOG(string error) => Debug.LogError(error);
     private static void EVENT_END_PROGRESS() => EditorUtility.ClearProgressBar();

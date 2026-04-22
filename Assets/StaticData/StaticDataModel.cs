@@ -4,19 +4,24 @@ using MemoryPack;
 
 public class StaticDataModel
 {
-    public List<sCityVO> sCityVOs  { set; get; }
-    public List<sCityLevelVO> sCityLevelVOs  { set; get; }
-    // @Dont delete - for Gen property@
+    public List<global::sCityVO> sCityVOs { get; private set; }
+    public List<global::sCityLevelVO> sCityLevelVOs { get; private set; }
 
     public void Init()
     {
-        sCityVOs = MemoryPackDeserialize<List<sCityVO>>("sCityVO");
-        sCityLevelVOs = MemoryPackDeserialize<List<sCityLevelVO>>("sCityLevelVO");
-        // @Dont delete - for Gen Init Func@
+        sCityVOs = MemoryPackDeserialize<List<global::sCityVO>>("sCityVO");
+        sCityLevelVOs = MemoryPackDeserialize<List<global::sCityLevelVO>>("sCityLevelVO");
     }
+
     private T MemoryPackDeserialize<T>(string filename)
     {
-        var bin = Resources.Load<TextAsset>("StaticData/" + filename).bytes;
-        return MemoryPackSerializer.Deserialize<T>(bin);
+        var asset = Resources.Load<TextAsset>("StaticData/" + filename);
+        if (asset == null)
+        {
+            Debug.LogError($"StaticData asset not found: {filename}");
+            return default;
+        }
+
+        return MemoryPackSerializer.Deserialize<T>(asset.bytes);
     }
 }

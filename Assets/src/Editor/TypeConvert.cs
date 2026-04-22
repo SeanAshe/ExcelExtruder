@@ -52,7 +52,7 @@ namespace ExcelExtruder
         {
             m_assembly = assembly;
             m_tryParseMethodInfos = new Dictionary<Type, MethodInfo>();
-            m_foundType = new Dictionary<string, Type>();
+            m_foundType = new Dictionary<string, Type>(StringComparer.Ordinal);
         }
 
         private void Error(string str)
@@ -65,6 +65,9 @@ namespace ExcelExtruder
             if (string.IsNullOrEmpty(typeName))
                 return null;
 
+            if (m_foundType.TryGetValue(typeName, out var cached))
+                return cached;
+
             Type t = null;
 
             // 尝试从动态程序集中获取类型
@@ -74,6 +77,21 @@ namespace ExcelExtruder
             // 尝试从默认程序集中获取类型
             if (t == null)
                 t = Assembly.GetExecutingAssembly().GetType(typeName);
+
+            // 尝试从当前已加载程序集中获取完整类型名
+            if (t == null)
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    t = assembly.GetType(typeName, false);
+                    if (t != null)
+                        break;
+                }
+            }
+
+            // 尝试在当前已加载程序集中按简单类型名匹配
+            if (t == null)
+                t = FindUniqueTypeBySimpleName(AppDomain.CurrentDomain.GetAssemblies(), typeName);
 
             // 尝试从系统库中获取类型
             if (t == null)
@@ -90,37 +108,21 @@ namespace ExcelExtruder
             }
             else
             {
+                m_foundType[typeName] = t;
                 return t;
             }
         }
 
         private Type FindTypeInCustomAssembly(string typename)
         {
-            Type t;
+            if (m_assembly == null)
+                return null;
 
-            if (!m_foundType.TryGetValue(typename, out t))
-            {
-                if (Environment.OSVersion.Platform == PlatformID.MacOSX)
-                {
-                    foreach (Type type in m_assembly.GetTypes())
-                    {
-                        if (string.Compare(type.Name, typename, false) != 0)
-                            continue;
+            var type = m_assembly.GetType(typename, false);
+            if (type != null)
+                return type;
 
-                        t = type;
-                        m_foundType.Add(typename, t);
-                        break;
-                    }
-                }
-                else
-                {
-                    t = m_assembly.GetType(typename);
-                    if (t != null)
-                        m_foundType.Add(typename, t);
-                }
-            }
-
-            return t;
+            return FindUniqueTypeBySimpleName(new[] { m_assembly }, typename);
         }
 
         private Type TryGetEnumType(string typeName)
@@ -239,7 +241,7 @@ namespace ExcelExtruder
                     Error("[TryParse] " + ex.Message);
                     UnityEngine.Debug.LogException(ex);
                     result = null;
-                    return true;
+                    return false;
                 }
             }
         }
@@ -268,7 +270,7 @@ namespace ExcelExtruder
             MethodInfo mi = GetMethodInfo(type, "TryParse");
             if (mi != null)
             {
-                var parameters = new object[] { trimmed, Activator.CreateInstance(type) };
+                var parameters = new object[] { trimmed, GetDefaultValue(type) };
                 if ((bool)mi.Invoke(null, parameters) == true)
                 {
                     result = parameters[1];
@@ -285,7 +287,7 @@ namespace ExcelExtruder
             // ③ 自定义类型：通过注册的委托调用 TryParse
             if (TryParseDelegates.TryGetValue(type, out var del))
             {
-                var parameters = new object[] { trimmed, Activator.CreateInstance(type) };
+                var parameters = new object[] { trimmed, GetDefaultValue(type) };
                 if ((bool)del.DynamicInvoke(parameters) == true)
                 {
                     result = parameters[1];
@@ -476,41 +478,29 @@ namespace ExcelExtruder
         protected virtual string[] CutStringByGroup(string str)
         {
             List<string> result = new List<string>();
+            if (string.IsNullOrWhiteSpace(str))
+                return result.ToArray();
 
             int bracketsDeep = 0;
             int startIndex = 0;
-            int length = 0;
 
             for (int i = 0; i < str.Length; i++)
             {
                 var cha = str[i];
-                if (cha == ' ') continue;
-
                 if (cha == '[')
                     bracketsDeep += 1;
 
                 if (cha == ']')
                     bracketsDeep -= 1;
 
-                if ((cha == SplitChar || i == str.Length - 1) && bracketsDeep == 0)
+                if (cha == SplitChar && bracketsDeep == 0)
                 {
-                    if (cha != SplitChar)
-                        length += 1;
-
-                    var buff = str.Substring(startIndex, length);
-                    if (buff.StartsWith("[") && buff.EndsWith("]"))
-                        buff = buff.Substring(1, buff.Length - 2);
-
-                    result.Add(buff);
+                    result.Add(NormalizeGroupToken(str.Substring(startIndex, i - startIndex)));
                     startIndex = i + 1;
-                    length = 0;
-                }
-                else
-                {
-                    length += 1;
                 }
             }
 
+            result.Add(NormalizeGroupToken(str.Substring(startIndex)));
             return result.ToArray();
         }
 
@@ -526,7 +516,7 @@ namespace ExcelExtruder
                 UnityEngine.Debug.LogError($"解析失败。请检查Excel表{m_extraInfo}");
                 result = default;
                 Error("[TryParse2Enum] " + ex.Message);
-                return true;
+                return false;
             }
         }
 
@@ -557,6 +547,70 @@ namespace ExcelExtruder
             var name = type.Name; // 例如: "List`1", "Dictionary`2"
             int index = name.IndexOf('`');
             return index >= 0 ? name.Substring(0, index) : name;
+        }
+
+        private static object GetDefaultValue(Type type)
+        {
+            return type.IsValueType ? Activator.CreateInstance(type) : null;
+        }
+
+        private static string NormalizeGroupToken(string token)
+        {
+            var buff = token.Trim();
+            if (buff.StartsWith("[") && buff.EndsWith("]"))
+                buff = buff.Substring(1, buff.Length - 2).Trim();
+
+            return buff;
+        }
+
+        private Type FindUniqueTypeBySimpleName(IEnumerable<Assembly> assemblies, string typeName)
+        {
+            List<Type> matches = null;
+
+            foreach (var assembly in assemblies)
+            {
+                if (assembly == null)
+                    continue;
+
+                foreach (var type in GetLoadableTypes(assembly))
+                {
+                    if (!string.Equals(type.Name, typeName, StringComparison.Ordinal))
+                        continue;
+
+                    matches ??= new List<Type>();
+                    if (!matches.Contains(type))
+                        matches.Add(type);
+                }
+            }
+
+            if (matches == null || matches.Count == 0)
+                return null;
+
+            if (matches.Count > 1)
+            {
+                Error("[TryGetType] Ambiguous type name: " + typeName + ". Matches: " + string.Join(", ", matches.ConvertAll(t => t.FullName)));
+                return null;
+            }
+
+            return matches[0];
+        }
+
+        private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
+        {
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                var result = new List<Type>();
+                foreach (var type in ex.Types)
+                {
+                    if (type != null)
+                        result.Add(type);
+                }
+                return result;
+            }
         }
     }
 }

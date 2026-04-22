@@ -6,7 +6,7 @@ using MemoryPack;
 [MemoryPackable]
 public partial class sCityVO
 {
-    [Unique] public string m_id;
+    [PrimaryKey] public string m_id;
     public string m_name;
     public string m_desc;
     [Fixed] public string m_mapID;
@@ -16,7 +16,7 @@ public partial class sCityVO
 [MemoryPackable]
 public partial class sCityLevelVO
 {
-    [Unique] public int m_level;
-    public int m_exp;
+    [PrimaryKey] public int m_level;
+    [Range(0, 10)] public int m_exp;
     public int m_houseLimit;
 }

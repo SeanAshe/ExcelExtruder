@@ -1,17 +1,16 @@
 using UnityEngine;
 using Sylvan.Data;
 using Sylvan.Data.Excel;
-using Sylvan.Data.Csv;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
-using System.Data.Common;
-using System;
 using System.Reflection;
-using System.Text;
 using System.Security.Cryptography;
+using System.Text;
 using System.Xml.Linq;
 using MemoryPack;
 
@@ -25,16 +24,19 @@ namespace ExcelExtruder
         protected virtual string CSV_PATH => "./Documents/CSV/";
         protected virtual string BIN_PATH => Application.dataPath + "/Resources/StaticData/";
         protected virtual string CONFIG_PATH => "./excelconfig";
+
         private TypeConvert m_typeConvert;
         private DataValidator m_validator;
         private Action<string, float, string, string> _EVENT_PROGRESS;
         private Action _EVENT_END_PROGRESS;
         private Action<string> _EVENT_LOG;
         private Action<string> _EVENT_ERROR_LOG;
+
         private void Progress(float progress, string action, string name) => _EVENT_PROGRESS?.Invoke("Excels 序列化", progress, action, name);
         private void EndProgress() => _EVENT_END_PROGRESS?.Invoke();
         private void LogError(string error) => _EVENT_ERROR_LOG?.Invoke(error);
         private void Log(string log) => _EVENT_LOG?.Invoke(log);
+
         public void Init(TypeConvert typeConvert, Action EVENT_END_PROGRESS,
             Action<string, float, string, string> EVENT_PROGRESS,
             Action<string> EVENT_ERROR_LOG,
@@ -59,8 +61,6 @@ namespace ExcelExtruder
             _EVENT_ERROR_LOG = EVENT_ERROR_LOG;
         }
 
-        private ExcelConfig m_config;
-
         /// <summary>
         /// 加载已有的 Excel 配置（含哈希信息）
         /// </summary>
@@ -73,11 +73,10 @@ namespace ExcelExtruder
             {
                 var bin = File.ReadAllBytes(CONFIG_PATH);
                 var config = MemoryPackSerializer.Deserialize<ExcelConfig>(bin);
-                return config ?? new ExcelConfig();
+                return NormalizeConfig(config);
             }
             catch
             {
-                // 旧格式不兼容，返回空配置以触发全量重建
                 Log("配置文件格式不兼容，将执行全量重建");
                 return new ExcelConfig();
             }
@@ -86,9 +85,9 @@ namespace ExcelExtruder
         /// <summary>
         /// 保存 Excel 配置
         /// </summary>
-        private void SaveExcelConfig()
+        private void SaveExcelConfig(ExcelConfig config)
         {
-            var bin = MemoryPackSerializer.Serialize(m_config);
+            var bin = MemoryPackSerializer.Serialize(config);
             File.WriteAllBytes(CONFIG_PATH, bin);
         }
 
@@ -112,44 +111,75 @@ namespace ExcelExtruder
             try
             {
                 Progress(0, "SerializeExcels", "Start");
-                DirectoryInfo folder = new DirectoryInfo(EXCELRES_PATH);
-                var files = folder.GetFiles("*.xlsx", SearchOption.AllDirectories);
-                var count = files.Length;
-                var index = 0;
+
+                var existingConfig = forceAll ? new ExcelConfig() : LoadExcelConfig();
+                var nextConfig = new ExcelConfig();
+                var pendingCommits = new List<ExcelConvertResult>();
+                var discoveredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var files = GetExcelFiles();
+                var processedCount = 0;
                 var skippedCount = 0;
+                var failedCount = 0;
+                var count = files.Length;
 
-                // 加载已有配置用于增量判断
-                m_config = forceAll ? new ExcelConfig() : LoadExcelConfig();
-
-                foreach (FileInfo file in files)
+                for (int index = 0; index < count; index++)
                 {
-                    if (file.Name.StartsWith("~$")) continue;
-                    Progress((float)index / count, "SerializeExcel", file.Name);
+                    var file = files[index];
+                    if (file.Name.StartsWith("~$"))
+                        continue;
 
-                    // 增量判断：比对文件哈希
+                    var relativePath = GetWorkbookRelativePath(file);
+                    discoveredFiles.Add(relativePath);
+                    Progress((float)index / Math.Max(1, count), "SerializeExcel", relativePath);
+
                     var currentHash = ComputeFileHash(file.FullName);
+                    existingConfig.Files.TryGetValue(relativePath, out var existingInfo);
+
                     if (!forceAll
-                        && m_config.Files.TryGetValue(file.Name, out var existingInfo)
-                        && existingInfo.Hash == currentHash)
+                        && existingInfo != null
+                        && string.Equals(existingInfo.Hash, currentHash, StringComparison.OrdinalIgnoreCase)
+                        && OutputsExist(existingInfo))
                     {
-                        Log($"[增量跳过] {file.Name} 未变更");
+                        nextConfig.Files[relativePath] = CloneInfo(existingInfo);
                         skippedCount++;
-                        index += 1;
+                        Log($"[增量跳过] {relativePath} 未变更");
                         continue;
                     }
 
-                    // 需要序列化
-                    var info = ConvertOneExcel(file.Name);
-                    m_config.Files[info.FileName] = new ExcelFileInfo
+                    var result = ConvertOneExcel(relativePath);
+                    if (result.Success)
                     {
-                        Hash = currentHash,
-                        Sheets = info.Sheets
-                    };
-                    index += 1;
+                        pendingCommits.Add(result);
+                        nextConfig.Files[relativePath] = CreateExcelFileInfo(result, currentHash);
+                        processedCount++;
+                    }
+                    else
+                    {
+                        failedCount++;
+                        if (existingInfo != null)
+                        {
+                            nextConfig.Files[relativePath] = CloneInfo(existingInfo);
+                            Log($"[保留旧产物] {relativePath} 导出失败，继续使用上一版 bytes");
+                        }
+                    }
                 }
 
-                SaveExcelConfig();
-                Log($"序列化完成: 处理 {index - skippedCount} 个文件, 跳过 {skippedCount} 个未变更文件");
+                var duplicateErrors = ValidateDuplicateSheets(nextConfig);
+                if (duplicateErrors.Count > 0)
+                {
+                    foreach (var error in duplicateErrors)
+                        LogError(error);
+
+                    LogError("检测到重复 Sheet 名称，已取消本次提交，配置和产物保持不变");
+                    EndProgress();
+                    return;
+                }
+
+                CleanupRemovedOutputs(existingConfig, nextConfig, discoveredFiles);
+                CommitOutputs(pendingCommits);
+                SaveExcelConfig(nextConfig);
+
+                Log($"序列化完成: 成功处理 {processedCount} 个文件, 跳过 {skippedCount} 个文件, 失败 {failedCount} 个文件");
                 Progress(1, "SerializeExcels", "End");
             }
             catch (Exception e)
@@ -159,22 +189,252 @@ namespace ExcelExtruder
             }
         }
 
+        private FileInfo[] GetExcelFiles()
+        {
+            var folder = new DirectoryInfo(EXCELRES_PATH);
+            if (!folder.Exists)
+                return Array.Empty<FileInfo>();
+
+            var files = folder.GetFiles("*.xlsx", SearchOption.AllDirectories);
+            Array.Sort(files, (left, right) => string.CompareOrdinal(left.FullName, right.FullName));
+            return files;
+        }
+
+        private ExcelConfig NormalizeConfig(ExcelConfig config)
+        {
+            var normalized = new ExcelConfig();
+            if (config?.Files == null)
+                return normalized;
+
+            foreach (var pair in config.Files)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null)
+                    continue;
+
+                normalized.Files[NormalizeRelativePath(pair.Key)] = CloneInfo(pair.Value);
+            }
+
+            return normalized;
+        }
+
+        private ExcelFileInfo CloneInfo(ExcelFileInfo info)
+        {
+            var clone = new ExcelFileInfo
+            {
+                Hash = info?.Hash,
+                Sheets = new List<ExcelSheetInfo>()
+            };
+
+            if (info?.Sheets == null)
+                return clone;
+
+            foreach (var sheet in info.Sheets)
+            {
+                if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName))
+                    continue;
+
+                clone.Sheets.Add(new ExcelSheetInfo
+                {
+                    SheetName = sheet.SheetName,
+                    TypeName = string.IsNullOrWhiteSpace(sheet.TypeName) ? sheet.SheetName : sheet.TypeName
+                });
+            }
+
+            return clone;
+        }
+
+        private string GetWorkbookRelativePath(FileInfo file)
+        {
+            var root = Path.GetFullPath(EXCELRES_PATH);
+            return NormalizeRelativePath(Path.GetRelativePath(root, file.FullName));
+        }
+
+        private static string NormalizeRelativePath(string path)
+        {
+            return path.Replace('\\', '/');
+        }
+
+        private string GetWorkbookFullPath(string relativePath)
+        {
+            return Path.GetFullPath(Path.Combine(EXCELRES_PATH, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        }
+
+        private string GetCsvOutputPath(string sheetName)
+        {
+            return Path.Combine(CSV_PATH, sheetName + ".csv");
+        }
+
+        private string GetBinOutputPath(string sheetName)
+        {
+            return Path.Combine(BIN_PATH, sheetName + ".bytes");
+        }
+
+        private bool OutputsExist(ExcelFileInfo info)
+        {
+            if (info?.Sheets == null || info.Sheets.Count == 0)
+                return false;
+
+            foreach (var sheet in info.Sheets)
+            {
+                if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName))
+                    return false;
+
+                if (!File.Exists(GetCsvOutputPath(sheet.SheetName)) || !File.Exists(GetBinOutputPath(sheet.SheetName)))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private ExcelFileInfo CreateExcelFileInfo(ExcelConvertResult result, string hash)
+        {
+            var info = new ExcelFileInfo
+            {
+                Hash = hash,
+                Sheets = new List<ExcelSheetInfo>()
+            };
+
+            foreach (var sheet in result.Sheets)
+            {
+                info.Sheets.Add(new ExcelSheetInfo
+                {
+                    SheetName = sheet.SheetName,
+                    TypeName = sheet.TypeName
+                });
+            }
+
+            return info;
+        }
+
+        private List<string> ValidateDuplicateSheets(ExcelConfig config)
+        {
+            var errors = new List<string>();
+            var owners = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var file in config.Files)
+            {
+                if (file.Value?.Sheets == null)
+                    continue;
+
+                foreach (var sheet in file.Value.Sheets)
+                {
+                    if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName))
+                        continue;
+
+                    if (!owners.TryAdd(sheet.SheetName, file.Key))
+                    {
+                        errors.Add($"[重复Sheet] {sheet.SheetName} 同时存在于 {owners[sheet.SheetName]} 和 {file.Key}");
+                    }
+                }
+            }
+
+            return errors;
+        }
+
+        private void CleanupRemovedOutputs(ExcelConfig previousConfig, ExcelConfig nextConfig, HashSet<string> discoveredFiles)
+        {
+            foreach (var pair in previousConfig.Files)
+            {
+                if (!discoveredFiles.Contains(pair.Key))
+                {
+                    DeleteOutputs(pair.Value);
+                    continue;
+                }
+
+                if (!nextConfig.Files.TryGetValue(pair.Key, out var nextInfo))
+                    continue;
+
+                DeleteRemovedSheetOutputs(pair.Value, nextInfo);
+            }
+        }
+
+        private void CommitOutputs(List<ExcelConvertResult> results)
+        {
+            foreach (var result in results)
+            {
+                foreach (var sheet in result.Sheets)
+                {
+                    File.WriteAllText(GetCsvOutputPath(sheet.SheetName), sheet.CsvContent);
+                    File.WriteAllBytes(GetBinOutputPath(sheet.SheetName), sheet.BinaryData);
+                }
+            }
+        }
+
+        private void DeleteOutputs(ExcelFileInfo info)
+        {
+            if (info?.Sheets == null)
+                return;
+
+            foreach (var sheet in info.Sheets)
+                DeleteSheetOutputs(sheet);
+        }
+
+        private void DeleteRemovedSheetOutputs(ExcelFileInfo previousInfo, ExcelFileInfo nextInfo)
+        {
+            if (previousInfo?.Sheets == null)
+                return;
+
+            var nextNames = new HashSet<string>(StringComparer.Ordinal);
+            if (nextInfo?.Sheets != null)
+            {
+                foreach (var sheet in nextInfo.Sheets)
+                    nextNames.Add(sheet.SheetName);
+            }
+
+            foreach (var sheet in previousInfo.Sheets)
+            {
+                if (!nextNames.Contains(sheet.SheetName))
+                    DeleteSheetOutputs(sheet);
+            }
+        }
+
+        private void DeleteSheetOutputs(ExcelSheetInfo sheet)
+        {
+            if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName))
+                return;
+
+            DeleteIfExists(GetCsvOutputPath(sheet.SheetName));
+            DeleteIfExists(GetBinOutputPath(sheet.SheetName));
+        }
+
+        private static void DeleteIfExists(string path)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+
         /// <summary>
         /// 单个 Excel 文件的序列化结果
         /// </summary>
-        public struct ExcelConvertResult
+        public sealed class ExcelConvertResult
         {
-            public string FileName;
-            public List<string> Sheets;
+            public string WorkbookPath;
+            public bool Success = true;
+            public List<SheetConvertResult> Sheets = new List<SheetConvertResult>();
         }
 
-        public ExcelConvertResult ConvertOneExcel(string fileName)
+        public sealed class SheetConvertResult
         {
-            ExcelWorkbookType workbooktype = ExcelDataReader.GetWorkbookType(EXCELRES_PATH + fileName);
-            var sheets = new List<string>();
+            public string SheetName;
+            public string TypeName;
+            public string CsvContent;
+            public byte[] BinaryData;
+        }
 
-            using var fs = new FileInfo(EXCELRES_PATH + fileName).Open(FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var edr = ExcelDataReader.Create(fs, workbooktype, new ExcelDataReaderOptions()
+        private sealed class ParsedRowData
+        {
+            public int RowIndex;
+            public object Data;
+        }
+
+        public ExcelConvertResult ConvertOneExcel(string workbookRelativePath)
+        {
+            var workbookPath = GetWorkbookFullPath(workbookRelativePath);
+            var result = new ExcelConvertResult { WorkbookPath = workbookRelativePath };
+            var workbookType = ExcelDataReader.GetWorkbookType(workbookPath);
+
+            using var fs = new FileInfo(workbookPath).Open(FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var edr = ExcelDataReader.Create(fs, workbookType, new ExcelDataReaderOptions
             {
                 Schema = ExcelSchema.NoHeaders,
                 Culture = CultureInfo.InvariantCulture,
@@ -184,229 +444,426 @@ namespace ExcelExtruder
             {
                 var sheetName = edr.WorksheetName;
                 m_validator.ClearContext();
-                sheets.Add(sheetName);
+
+                if (string.IsNullOrWhiteSpace(sheetName))
+                {
+                    LogError($"[{workbookRelativePath}] 存在未命名 Sheet，已取消该文件导出");
+                    result.Success = false;
+                    continue;
+                }
+
+                var classType = m_typeConvert.TryGetType(sheetName);
+                if (classType == null)
+                {
+                    LogError($"[{workbookRelativePath}/{sheetName}] 找不到对应的数据类型，Sheet 名需要与类名一致或唯一匹配");
+                    result.Success = false;
+                    continue;
+                }
+
+                var genericList = TypeConvert.CreateGeneric(typeof(List<>), classType);
+                var list = (IList)genericList;
                 var heads = new List<int>();
                 var headNames = new List<string>();
-                Type classType = m_typeConvert.TryGetType(sheetName);
-                object genericList = TypeConvert.CreateGeneric(typeof(List<>), classType);
-                var list = (IList)genericList;
-
-                // 1. 准备字典，用于 Diff 校验
+                var csvBuilder = new StringBuilder();
+                var validationErrors = new List<ValidationError>();
+                var diffWarnings = new List<ValidationError>();
+                var parseErrors = new List<string>();
                 Dictionary<string, object> oldDataMap = null;
-                var newDataMap = new Dictionary<string, object>();
+                var newDataMap = new Dictionary<string, ParsedRowData>(StringComparer.Ordinal);
+                FieldInfo primaryKeyField = null;
+                var headerFound = false;
+                var dataRowIndex = 0;
+                var sheetHasFatalError = false;
 
-                using var cdw = new StreamWriter(CSV_PATH + sheetName + ".csv", false);
-                int dataRowIndex = 0;
-
-                var allErrors = new List<ValidationError>();
-                bool formulaScanned = false;
-
-                while(edr.Read())
+                while (edr.Read())
                 {
-                    if (edr.GetString(0) == EXCEL_SKIP) continue;
-                    if (edr.GetString(0) == EXCEL_FIELDNAME)
+                    var firstCell = GetCellString(edr, 0);
+                    if (firstCell == EXCEL_SKIP)
+                        continue;
+
+                    if (firstCell == EXCEL_FIELDNAME)
                     {
-                        for (int i = 0; i < edr.FieldCount; i++)
+                        if (headerFound)
                         {
-                            if (edr.GetString(i) != null
-                                && edr.GetString(i) != ""
-                                && edr.GetString(i) != EXCEL_SKIP
-                                && edr.GetString(i) != EXCEL_FIELDNAME)
-                            {
-                                heads.Add(i);
-                                headNames.Add(edr.GetString(i));
-                            }
+                            parseErrors.Add($"[{workbookRelativePath}/{sheetName}] 出现了重复的表头定义行 '@'");
+                            sheetHasFatalError = true;
+                            continue;
                         }
 
-                        // headNames 建立完成后，对 [NoFormula] 字段执行公式扫描
-                        if (!formulaScanned)
-                        {
-                            formulaScanned = true;
-                            CheckNoFormulaFields(EXCELRES_PATH + fileName, sheetName, classType, heads, headNames, allErrors);
+                        headerFound = true;
+                        if (!TryReadHeader(classType, edr, workbookRelativePath, sheetName, heads, headNames))
+                            sheetHasFatalError = true;
 
-                            // 此时已有正确的 headNames，可以根据第一列提取主键并反序列化旧数据
-                            oldDataMap = headNames.Count > 0 ? LoadBaselineFromBin(classType, headNames[0]) : new Dictionary<string, object>();
-                        }
+                        var headerRow = edr.Select(heads.ToArray());
+                        AppendCsvRow(csvBuilder, headerRow);
+
+                        if (headNames.Count == 0)
+                            continue;
+
+                        CheckNoFormulaFields(workbookPath, sheetName, classType, heads, headNames, validationErrors);
+
+                        if (!TryResolvePrimaryKeyField(sheetName, classType, headNames, out primaryKeyField))
+                            sheetHasFatalError = true;
+
+                        if (primaryKeyField != null)
+                            oldDataMap = LoadBaselineFromBin(sheetName, classType, primaryKeyField);
+
+                        continue;
                     }
-                    var row = edr.Select(heads.ToArray());
-                    Write2Csv(cdw, row);
-                    if (edr.GetString(0) == EXCEL_FIELDNAME) continue;
 
+                    if (!headerFound)
+                        continue;
+
+                    var row = edr.Select(heads.ToArray());
+                    AppendCsvRow(csvBuilder, row);
                     dataRowIndex++;
 
-                    // 收集原始值用于校验报告
-                    var rawValues = new Dictionary<string, string>();
+                    var rawValues = new Dictionary<string, string>(StringComparer.Ordinal);
                     for (int i = 0; i < row.FieldCount && i < headNames.Count; i++)
+                        rawValues[headNames[i]] = GetCellString(row, i);
+
+                    if (!TryConvertToObject(classType, row, headNames, sheetName, dataRowIndex, out var obj))
                     {
-                        rawValues[headNames[i]] = row.GetString(i);
+                        sheetHasFatalError = true;
+                        continue;
                     }
 
-                    var obj = Convert2Object(classType, row, headNames);
-                    if (obj == null) continue;
+                    validationErrors.AddRange(m_validator.Validate(obj, classType, sheetName, dataRowIndex, rawValues));
 
-                    // 数据校验（收集错误，不阻断序列化）
-                    var errors = m_validator.Validate(obj, classType, sheetName, dataRowIndex, rawValues);
-                    allErrors.AddRange(errors);
-
-                    string pk = row.GetString(0);
-                    if (!string.IsNullOrEmpty(pk))
+                    if (primaryKeyField != null)
                     {
-                        newDataMap[pk] = obj;
-
-                        // 判定是否是新增行，如果是，则执行新增行的全局验证（如 [NoReuse]）
-                        if (oldDataMap != null && !oldDataMap.ContainsKey(pk))
+                        var pk = GetPrimaryKeyValue(primaryKeyField, obj);
+                        if (!string.IsNullOrEmpty(pk))
                         {
-                            var newRowErrors = m_validator.ValidateNewRow(classType, sheetName, dataRowIndex, obj, oldDataMap);
-                            allErrors.AddRange(newRowErrors);
+                            if (newDataMap.ContainsKey(pk))
+                            {
+                                parseErrors.Add($"[{workbookRelativePath}/{sheetName}] 第{dataRowIndex}行主键重复: {primaryKeyField.Name} = {pk}");
+                                sheetHasFatalError = true;
+                            }
+                            else
+                            {
+                                newDataMap[pk] = new ParsedRowData
+                                {
+                                    RowIndex = dataRowIndex,
+                                    Data = obj
+                                };
+
+                                if (oldDataMap != null && !oldDataMap.ContainsKey(pk))
+                                    validationErrors.AddRange(m_validator.ValidateNewRow(classType, sheetName, dataRowIndex, obj, oldDataMap));
+                            }
                         }
                     }
 
                     list.Add(obj);
                 }
 
-                // 2. 循环结束后，执行后置的 Diff 差异校验
-                PerformDiffValidation(sheetName, classType, oldDataMap, newDataMap, allErrors);
-
-                // 统一输出所有校验错误
-                if (allErrors.Count > 0)
+                if (!headerFound)
                 {
-                    LogError($"[校验报告] {sheetName} 共发现 {allErrors.Count} 个校验错误:");
-                    foreach (var error in allErrors)
-                    {
-                        LogError(error.ToString());
-                    }
+                    parseErrors.Add($"[{workbookRelativePath}/{sheetName}] 未找到表头定义行 '@'");
+                    sheetHasFatalError = true;
                 }
 
-                MemoryPackSerializeAndSave(genericList, classType);
+                diffWarnings.AddRange(PerformDiffValidation(sheetName, classType, oldDataMap, newDataMap));
 
-            } while(edr.NextResult());
+                // foreach (var parseError in parseErrors)
+                //     LogError(parseError);
 
-            return new ExcelConvertResult { FileName = fileName, Sheets = sheets };
+                if (validationErrors.Count > 0)
+                {
+                    LogError($"[校验报告] {sheetName} 共发现 {validationErrors.Count} 个阻断错误:");
+                    foreach (var error in validationErrors)
+                        LogError(error.ToString());
+
+                    sheetHasFatalError = true;
+                }
+
+                if (diffWarnings.Count > 0)
+                {
+                    Log($"[Diff提示] {sheetName} 共发现 {diffWarnings.Count} 个变更提示:");
+                    foreach (var warning in diffWarnings)
+                        Log(warning.ToString());
+                }
+
+                if (sheetHasFatalError)
+                {
+                    result.Success = false;
+                    continue;
+                }
+
+                result.Sheets.Add(new SheetConvertResult
+                {
+                    SheetName = sheetName,
+                    TypeName = classType.FullName ?? classType.Name,
+                    CsvContent = csvBuilder.ToString(),
+                    BinaryData = SerializeToBytes(genericList)
+                });
+            } while (edr.NextResult());
+
+            return result;
         }
 
-        /// <summary>
-        /// 从 StaticData 目录加载对应类型的 .bytes 文件，反序列化作为基线数据
-        /// key: 主键 (导出后的第一列的值), value: 反序列化后的旧对象
-        /// </summary>
-        private Dictionary<string, object> LoadBaselineFromBin(Type classType, string pkFieldName)
+        private bool TryReadHeader(Type classType, DbDataReader row, string workbookPath, string sheetName, List<int> heads, List<string> headNames)
         {
-            var dataMap = new Dictionary<string, object>();
-            string binPath = BIN_PATH + classType.ToString() + ".bytes";
-            if (!File.Exists(binPath)) return dataMap;
+            heads.Clear();
+            headNames.Clear();
+
+            var duplicates = new HashSet<string>(StringComparer.Ordinal);
+            var success = true;
+
+            for (int i = 0; i < row.FieldCount; i++)
+            {
+                var fieldName = GetCellString(row, i);
+                if (string.IsNullOrEmpty(fieldName)
+                    || fieldName == EXCEL_SKIP
+                    || fieldName == EXCEL_FIELDNAME)
+                    continue;
+
+                if (!duplicates.Add(fieldName))
+                {
+                    LogError($"[{workbookPath}/{sheetName}] 表头字段重复: {fieldName}");
+                    success = false;
+                    continue;
+                }
+
+                if (GetPublicInstanceField(classType, fieldName) == null)
+                {
+                    LogError($"[{workbookPath}/{sheetName}] 找不到字段: {fieldName}，对应类型 {classType.FullName}");
+                    success = false;
+                    continue;
+                }
+
+                heads.Add(i);
+                headNames.Add(fieldName);
+            }
+
+            if (headNames.Count == 0)
+            {
+                LogError($"[{workbookPath}/{sheetName}] 未解析到任何可导出字段");
+                success = false;
+            }
+
+            return success;
+        }
+
+        private bool TryResolvePrimaryKeyField(string sheetName, Type classType, List<string> headNames, out FieldInfo primaryKeyField)
+        {
+            primaryKeyField = null;
+            if (headNames == null || headNames.Count == 0)
+            {
+                LogError($"[{sheetName}] 表头为空，无法解析主键字段");
+                return false;
+            }
+
+            var markedFields = new List<FieldInfo>();
+            var uniqueFields = new List<FieldInfo>();
+
+            foreach (var headName in headNames)
+            {
+                var field = GetPublicInstanceField(classType, headName);
+                if (field == null)
+                    continue;
+
+                if (field.GetCustomAttribute<PrimaryKeyAttribute>() != null)
+                    markedFields.Add(field);
+
+                if (field.GetCustomAttribute<UniqueAttribute>() != null)
+                    uniqueFields.Add(field);
+            }
+
+            if (markedFields.Count > 1)
+            {
+                LogError($"[{sheetName}] 存在多个 [PrimaryKey] 字段，请只保留一个");
+                return false;
+            }
+
+            if (markedFields.Count == 1)
+            {
+                primaryKeyField = markedFields[0];
+                return true;
+            }
+
+            var firstField = GetPublicInstanceField(classType, headNames[0]);
+            if (firstField != null && firstField.GetCustomAttribute<UniqueAttribute>() != null)
+            {
+                primaryKeyField = firstField;
+                Log($"[{sheetName}] 未标记 [PrimaryKey]，回退使用第一列唯一字段 {primaryKeyField.Name}");
+                return true;
+            }
+
+            if (uniqueFields.Count == 1)
+            {
+                primaryKeyField = uniqueFields[0];
+                Log($"[{sheetName}] 未标记 [PrimaryKey]，回退使用唯一字段 {primaryKeyField.Name}");
+                return true;
+            }
+
+            if (uniqueFields.Count > 1)
+                Log($"[{sheetName}] 存在多个 [Unique] 字段且未标记 [PrimaryKey]，跳过 Diff/新增校验");
+            else
+                Log($"[{sheetName}] 未找到主键字段，跳过 Diff/新增校验");
+
+            return true;
+        }
+
+        private Dictionary<string, object> LoadBaselineFromBin(string sheetName, Type classType, FieldInfo pkField)
+        {
+            var dataMap = new Dictionary<string, object>(StringComparer.Ordinal);
+            var binPath = GetBinOutputPath(sheetName);
+            if (!File.Exists(binPath))
+                return dataMap;
 
             try
             {
                 var bin = File.ReadAllBytes(binPath);
                 var listType = typeof(List<>).MakeGenericType(classType);
                 var oldList = MemoryPackSerializer.Deserialize(listType, bin) as IList;
-                
-                if (oldList != null)
-                {
-                    var pkField = classType.GetField(pkFieldName);
-                    if (pkField == null) return dataMap;
+                if (oldList == null)
+                    return dataMap;
 
-                    foreach (var item in oldList)
-                    {
-                        if (item == null) continue;
-                        var pkValue = pkField.GetValue(item)?.ToString();
-                        if (!string.IsNullOrEmpty(pkValue))
-                        {
-                            dataMap[pkValue] = item;
-                        }
-                    }
+                foreach (var item in oldList)
+                {
+                    if (item == null)
+                        continue;
+
+                    var pkValue = GetPrimaryKeyValue(pkField, item);
+                    if (!string.IsNullOrEmpty(pkValue))
+                        dataMap[pkValue] = item;
                 }
             }
             catch (Exception e)
             {
-                Log($"加载基线数据 {classType.Name}.bytes 失败: {e.Message}");
+                Log($"加载基线数据 {sheetName}.bytes 失败: {e.Message}");
             }
+
             return dataMap;
         }
 
-        /// <summary>
-        /// 执行新老数据的 Diff 差异校验（支持插行、插列）
-        /// </summary>
-        private void PerformDiffValidation(
-            string sheetName, Type classType,
+        private List<ValidationError> PerformDiffValidation(
+            string sheetName,
+            Type classType,
             Dictionary<string, object> oldDataMap,
-            Dictionary<string, object> newDataMap,
-            List<ValidationError> allErrors)
+            Dictionary<string, ParsedRowData> newDataMap)
         {
-            if (oldDataMap == null || oldDataMap.Count == 0 || newDataMap.Count == 0) return;
+            var warnings = new List<ValidationError>();
+            if (oldDataMap == null || oldDataMap.Count == 0 || newDataMap.Count == 0)
+                return warnings;
 
-            int rowIndex = 0; 
             var fields = classType.GetFields(BindingFlags.Public | BindingFlags.Instance);
-
             foreach (var newKvp in newDataMap)
             {
-                rowIndex++;
-                string pk = newKvp.Key;
-                object newObj = newKvp.Value;
+                if (!oldDataMap.TryGetValue(newKvp.Key, out var oldObj))
+                    continue;
 
-                // 插行：旧数据中没有，视为新增行，安全跳过 Diff
-                if (!oldDataMap.TryGetValue(pk, out var oldObj)) continue;
-
-                // 发生更新：对比两行数据
                 foreach (var field in fields)
                 {
-                    object oldValue = field.GetValue(oldObj);
-                    object newValue = field.GetValue(newObj);
-
+                    var oldValue = field.GetValue(oldObj);
+                    var newValue = field.GetValue(newKvp.Value.Data);
                     var diffErrors = m_validator.ValidateDiff(classType, field.Name, oldValue, newValue);
-                    if (diffErrors != null)
+                    if (diffErrors == null)
+                        continue;
+
+                    foreach (var errorMsg in diffErrors)
                     {
-                        foreach (var errorMsg in diffErrors)
+                        warnings.Add(new ValidationError
                         {
-                            allErrors.Add(new ValidationError
-                            {
-                                SheetName = sheetName,
-                                RowIndex = rowIndex,
-                                FieldName = field.Name,
-                                RawValue = newValue?.ToString() ?? "",
-                                Message = $"[Diff变更] {errorMsg}"
-                            });
-                        }
+                            SheetName = sheetName,
+                            RowIndex = newKvp.Value.RowIndex,
+                            FieldName = field.Name,
+                            RawValue = newValue?.ToString() ?? string.Empty,
+                            Message = $"[Diff变更] {errorMsg}"
+                        });
                     }
                 }
             }
+
+            return warnings;
         }
 
-        protected void Write2Csv(StreamWriter ws, DbDataReader row)
+        protected bool TryConvertToObject(Type classType, DbDataReader row, List<string> headNames, string sheetName, int rowIndex, out object obj)
         {
-            var data = new List<string>();
-            for (var i = 0; i < row.FieldCount; i++)
-            {
-                data.Add(row.GetString(i));
-            }
-            ws.WriteLine(string.Join(",", data.ToArray()));
-        }
+            obj = Activator.CreateInstance(classType);
+            var success = true;
 
-        protected object Convert2Object(Type classType, DbDataReader row, List<string> headNames)
-        {
-            object obj = Activator.CreateInstance(classType);
-            for (int columnID = 0; columnID < row.FieldCount; columnID ++)
+            for (int columnID = 0; columnID < row.FieldCount && columnID < headNames.Count; columnID++)
             {
-                var fieldInfo = classType.GetField(headNames[columnID]);
+                var fieldInfo = GetPublicInstanceField(classType, headNames[columnID]);
                 if (fieldInfo == null)
                 {
-                    LogError("Can't find the field \"" + headNames[columnID] + "\" in the type \"" + classType.ToString());
-                    return null;
+                    LogError($"[{sheetName}] 第{rowIndex}行找不到字段 {headNames[columnID]}");
+                    success = false;
+                    continue;
                 }
-                string value = row.GetString(columnID);
-                object o;
-                if (m_typeConvert.TryParse(fieldInfo.FieldType, value, -1 , out o))
+
+                var value = GetCellString(row, columnID);
+                if (string.IsNullOrEmpty(value))
+                    continue;
+
+                m_typeConvert.m_extraInfo = $"{sheetName} 第{rowIndex}行 字段 {fieldInfo.Name}";
+                if (!m_typeConvert.TryParse(fieldInfo.FieldType, value, -1, out var parsedValue))
                 {
-                    fieldInfo.SetValue(obj, o);
+                    LogError($"[{sheetName}] 第{rowIndex}行字段 {fieldInfo.Name} 解析失败，原始值: {value}");
+                    success = false;
+                    continue;
                 }
+
+                if (parsedValue != null || !fieldInfo.FieldType.IsValueType || Nullable.GetUnderlyingType(fieldInfo.FieldType) != null)
+                    fieldInfo.SetValue(obj, parsedValue);
             }
-            return obj;
+
+            m_typeConvert.m_extraInfo = string.Empty;
+            return success;
         }
 
-        protected void MemoryPackSerializeAndSave(object obj, Type type)
+        private static byte[] SerializeToBytes(object obj)
         {
-            // 直接使用 MemoryPack 的非泛型 API，无需反射遍历方法
-            var bin = MemoryPackSerializer.Serialize(obj.GetType(), obj);
-            File.WriteAllBytes(BIN_PATH + type.ToString() + ".bytes", bin);
+            return MemoryPackSerializer.Serialize(obj.GetType(), obj);
+        }
+
+        protected void AppendCsvRow(StringBuilder builder, DbDataReader row)
+        {
+            for (int i = 0; i < row.FieldCount; i++)
+            {
+                if (i > 0)
+                    builder.Append(',');
+
+                builder.Append(EscapeCsvCell(GetCellString(row, i)));
+            }
+
+            builder.AppendLine();
+        }
+
+        private static string EscapeCsvCell(string value)
+        {
+            value ??= string.Empty;
+            if (value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0)
+                return value;
+
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        private static FieldInfo GetPublicInstanceField(Type type, string fieldName)
+        {
+            return type.GetField(fieldName, BindingFlags.Public | BindingFlags.Instance);
+        }
+
+        private static string GetCellString(DbDataReader row, int index)
+        {
+            if (row == null || index < 0 || index >= row.FieldCount || row.IsDBNull(index))
+                return null;
+
+            return row.GetString(index);
+        }
+
+        private static string GetPrimaryKeyValue(FieldInfo field, object obj)
+        {
+            var value = field?.GetValue(obj);
+            if (value == null)
+                return null;
+
+            if (value is IFormattable formattable)
+                return formattable.ToString(null, CultureInfo.InvariantCulture);
+
+            return value.ToString();
         }
 
         /// <summary>
@@ -424,15 +881,17 @@ namespace ExcelExtruder
         /// 检查标记了 [NoFormula] 的字段对应的 Excel 列是否存在公式
         /// </summary>
         private void CheckNoFormulaFields(
-            string xlsxPath, string sheetName, Type classType,
-            List<int> heads, List<string> headNames,
+            string xlsxPath,
+            string sheetName,
+            Type classType,
+            List<int> heads,
+            List<string> headNames,
             List<ValidationError> allErrors)
         {
-            // 找出标记 [NoFormula] 的字段名及其对应的 Excel 列号
-            var noFormulaColumns = new Dictionary<string, string>(); // key: 列字母前缀, value: 字段名
+            var noFormulaColumns = new Dictionary<string, string>(StringComparer.Ordinal);
             for (int i = 0; i < headNames.Count; i++)
             {
-                var field = classType.GetField(headNames[i]);
+                var field = GetPublicInstanceField(classType, headNames[i]);
                 if (field != null && field.GetCustomAttribute<NoFormulaAttribute>() != null)
                 {
                     var colLetter = ColumnIndexToLetter(heads[i]);
@@ -440,26 +899,24 @@ namespace ExcelExtruder
                 }
             }
 
-            if (noFormulaColumns.Count == 0) return;
+            if (noFormulaColumns.Count == 0)
+                return;
 
-            // 扫描公式单元格
             var formulaCells = ScanFormulaCells(xlsxPath, sheetName);
-
             foreach (var cell in formulaCells)
             {
-                // 从单元格引用提取列字母（如 "B3" -> "B"）
                 var colLetter = ExtractColumnLetter(cell.CellRef);
-                if (noFormulaColumns.TryGetValue(colLetter, out var fieldName))
+                if (!noFormulaColumns.TryGetValue(colLetter, out var fieldName))
+                    continue;
+
+                allErrors.Add(new ValidationError
                 {
-                    allErrors.Add(new ValidationError
-                    {
-                        SheetName = sheetName,
-                        RowIndex = ExtractRowNumber(cell.CellRef),
-                        FieldName = fieldName,
-                        RawValue = cell.FormulaText,
-                        Message = $"字段 '{fieldName}' 标记了 [NoFormula]，但单元格 {cell.CellRef} 的值由公式计算: {cell.FormulaText}"
-                    });
-                }
+                    SheetName = sheetName,
+                    RowIndex = ExtractRowNumber(cell.CellRef),
+                    FieldName = fieldName,
+                    RawValue = cell.FormulaText,
+                    Message = $"字段 '{fieldName}' 标记了 [NoFormula]，但单元格 {cell.CellRef} 的值由公式计算: {cell.FormulaText}"
+                });
             }
         }
 
@@ -502,7 +959,6 @@ namespace ExcelExtruder
             return 0;
         }
 
-        // xlsx OpenXML 命名空间
         private static readonly XNamespace s_nsSpreadsheet =
             "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         private static readonly XNamespace s_nsRelationship =
@@ -523,9 +979,9 @@ namespace ExcelExtruder
                 using var zipStream = new FileStream(xlsxPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read);
 
-                // 1. 读取 workbook.xml，找到目标 Sheet 的 rId
                 var wbEntry = zip.GetEntry("xl/workbook.xml");
-                if (wbEntry == null) return result;
+                if (wbEntry == null)
+                    return result;
 
                 XDocument wbDoc;
                 using (var wbStream = wbEntry.Open())
@@ -540,11 +996,13 @@ namespace ExcelExtruder
                         break;
                     }
                 }
-                if (rId == null) return result;
 
-                // 2. 读取 workbook.xml.rels，找到 Sheet 文件路径
+                if (rId == null)
+                    return result;
+
                 var relsEntry = zip.GetEntry("xl/_rels/workbook.xml.rels");
-                if (relsEntry == null) return result;
+                if (relsEntry == null)
+                    return result;
 
                 XDocument relsDoc;
                 using (var relsStream = relsEntry.Open())
@@ -559,45 +1017,45 @@ namespace ExcelExtruder
                         break;
                     }
                 }
-                if (sheetPath == null) return result;
 
-                // 3. 读取 Sheet XML，查找所有含 <f> 的单元格
+                if (sheetPath == null)
+                    return result;
+
                 var sheetEntry = zip.GetEntry(sheetPath);
-                if (sheetEntry == null) return result;
+                if (sheetEntry == null)
+                    return result;
 
                 XDocument sheetDoc;
                 using (var sheetStream = sheetEntry.Open())
                     sheetDoc = XDocument.Load(sheetStream);
 
-                // 先收集共享公式的原始文本（si 索引 -> 公式文本）
-                var sharedFormulas = new Dictionary<string, string>();
+                var sharedFormulas = new Dictionary<string, string>(StringComparer.Ordinal);
                 foreach (var cell in sheetDoc.Descendants(s_nsSpreadsheet + "c"))
                 {
                     var formula = cell.Element(s_nsSpreadsheet + "f");
-                    if (formula == null) continue;
+                    if (formula == null)
+                        continue;
 
-                    // 共享公式的定义方（有 ref 属性的那个）存储了完整公式
                     var si = formula.Attribute("si")?.Value;
                     var formulaText = formula.Value;
                     if (si != null && !string.IsNullOrEmpty(formulaText))
                         sharedFormulas[si] = formulaText;
                 }
 
-                // 收集所有公式单元格，共享公式引用方回溯原始文本
                 foreach (var cell in sheetDoc.Descendants(s_nsSpreadsheet + "c"))
                 {
                     var formula = cell.Element(s_nsSpreadsheet + "f");
-                    if (formula == null) continue;
+                    if (formula == null)
+                        continue;
 
                     var formulaText = formula.Value;
-
-                    // 共享公式引用方的 <f> 为空，通过 si 索引查找原始公式
                     if (string.IsNullOrEmpty(formulaText))
                     {
                         var si = formula.Attribute("si")?.Value;
                         if (si != null)
                             sharedFormulas.TryGetValue(si, out formulaText);
-                        formulaText = formulaText ?? "(共享公式)";
+
+                        formulaText ??= "(共享公式)";
                     }
 
                     result.Add(new FormulaCellInfo
@@ -630,10 +1088,12 @@ namespace ExcelExtruder
         protected Action _EVENT_END_PROGRESS;
         protected Action<string> _EVENT_LOG;
         protected Action<string> _EVENT_ERROR_LOG;
-        private void Progress(float progress, string action, string name) => _EVENT_PROGRESS?.Invoke("DataModel 自动生成",progress, action, name);
+
+        private void Progress(float progress, string action, string name) => _EVENT_PROGRESS?.Invoke("DataModel 自动生成", progress, action, name);
         private void EndProgress() => _EVENT_END_PROGRESS?.Invoke();
         private void LogError(string error) => _EVENT_ERROR_LOG?.Invoke(error);
         private void Log(string log) => _EVENT_LOG?.Invoke(log);
+
         public void Init(Action EVENT_END_PROGRESS,
             Action<string, float, string, string> EVENT_PROGRESS,
             Action<string> EVENT_ERROR_LOG,
@@ -654,6 +1114,7 @@ namespace ExcelExtruder
                     LogError("Excel config is not found! Please load excels first!");
                     return;
                 }
+
                 var bin = File.ReadAllBytes(config_path);
                 ExcelConfig config;
                 try
@@ -666,25 +1127,51 @@ namespace ExcelExtruder
                     return;
                 }
 
-                Progress(0, "GenerateStaticDataModel", "Start");
-
-                // 收集所有 Sheet 名称
-                var allSheets = new List<string>();
-                int fileIndex = 0;
-                foreach (var item in config.Files)
+                if (config?.Files == null)
                 {
-                    Progress((float)fileIndex / config.Files.Count, "ReadExcel", item.Key);
-                    allSheets.AddRange(item.Value.Sheets);
-                    fileIndex++;
+                    LogError("配置文件内容为空，请先重新执行 Serialize Excels");
+                    return;
                 }
 
-                // 使用 StringBuilder 结构化生成代码
+                Progress(0, "GenerateStaticDataModel", "Start");
+
+                var allSheets = new List<ExcelSheetInfo>();
+                var duplicates = new HashSet<string>(StringComparer.Ordinal);
+                var fileIndex = 0;
+                foreach (var item in config.Files)
+                {
+                    Progress((float)fileIndex / Math.Max(1, config.Files.Count), "ReadExcel", item.Key);
+                    fileIndex++;
+
+                    if (item.Value?.Sheets == null)
+                        continue;
+
+                    foreach (var sheet in item.Value.Sheets)
+                    {
+                        if (sheet == null || string.IsNullOrWhiteSpace(sheet.SheetName) || string.IsNullOrWhiteSpace(sheet.TypeName))
+                            continue;
+
+                        if (!duplicates.Add(sheet.SheetName))
+                        {
+                            LogError($"StaticDataModel 生成失败，发现重复的 Sheet 名称: {sheet.SheetName}");
+                            return;
+                        }
+
+                        allSheets.Add(new ExcelSheetInfo
+                        {
+                            SheetName = sheet.SheetName,
+                            TypeName = sheet.TypeName
+                        });
+                    }
+                }
+
+                allSheets.Sort((left, right) => string.CompareOrdinal(left.SheetName, right.SheetName));
                 var text = GenerateCode(allSheets);
 
                 if (!Directory.Exists(staticdatamodel_path))
                     Directory.CreateDirectory(staticdatamodel_path);
 
-                File.WriteAllText(staticdatamodel_path + "StaticDataModel.cs", text);
+                File.WriteAllText(Path.Combine(staticdatamodel_path, "StaticDataModel.cs"), text);
                 Log($"StaticDataModel.cs 已生成，包含 {allSheets.Count} 个数据表");
                 Progress(1, "GenerateStaticDataModel", "End");
             }
@@ -698,46 +1185,73 @@ namespace ExcelExtruder
         /// <summary>
         /// 使用 StringBuilder 结构化生成 StaticDataModel.cs 代码
         /// </summary>
-        private string GenerateCode(List<string> sheets)
+        private string GenerateCode(List<ExcelSheetInfo> sheets)
         {
             var sb = new StringBuilder();
 
-            // 1. using 声明
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using UnityEngine;");
             sb.AppendLine("using MemoryPack;");
             sb.AppendLine();
-
-            // 2. 类定义开始
             sb.AppendLine("public class StaticDataModel");
             sb.AppendLine("{");
 
-            // 3. 属性声明
             foreach (var sheet in sheets)
-            {
-                sb.AppendLine($"    public List<{sheet}> {sheet}s {{ get; set; }}");
-            }
-            sb.AppendLine();
+                sb.AppendLine($"    public List<{GetCodeTypeName(sheet.TypeName)}> {GetCollectionPropertyName(sheet.SheetName)} {{ get; private set; }}");
 
-            // 4. Init 方法
+            sb.AppendLine();
             sb.AppendLine("    public void Init()");
             sb.AppendLine("    {");
             foreach (var sheet in sheets)
-            {
-                sb.AppendLine($"        {sheet}s = MemoryPackDeserialize<List<{sheet}>>(\"{sheet}\");");
-            }
+                sb.AppendLine($"        {GetCollectionPropertyName(sheet.SheetName)} = MemoryPackDeserialize<List<{GetCodeTypeName(sheet.TypeName)}>>(\"{sheet.SheetName}\");");
             sb.AppendLine("    }");
 
-            // 5. 反序列化辅助方法
             sb.AppendLine();
             sb.AppendLine("    private T MemoryPackDeserialize<T>(string filename)");
             sb.AppendLine("    {");
-            sb.AppendLine($"        var bin = Resources.Load<TextAsset>(\"{bin_path}\" + filename).bytes;");
-            sb.AppendLine("        return MemoryPackSerializer.Deserialize<T>(bin);");
+            sb.AppendLine($"        var asset = Resources.Load<TextAsset>(\"{bin_path}\" + filename);");
+            sb.AppendLine("        if (asset == null)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            Debug.LogError($\"StaticData asset not found: {filename}\");");
+            sb.AppendLine("            return default;");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        return MemoryPackSerializer.Deserialize<T>(asset.bytes);");
             sb.AppendLine("    }");
-
-            // 6. 类定义结束
             sb.AppendLine("}");
+
+            return sb.ToString();
+        }
+
+        private static string GetCodeTypeName(string typeName)
+        {
+            return "global::" + typeName.Replace('+', '.');
+        }
+
+        private static string GetCollectionPropertyName(string sheetName)
+        {
+            var identifier = SanitizeIdentifier(sheetName);
+            if (identifier.EndsWith("s", StringComparison.Ordinal))
+                return identifier + "List";
+
+            return identifier + "s";
+        }
+
+        private static string SanitizeIdentifier(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "_";
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < value.Length; i++)
+            {
+                var c = value[i];
+                var isValid = i == 0
+                    ? char.IsLetter(c) || c == '_'
+                    : char.IsLetterOrDigit(c) || c == '_';
+
+                sb.Append(isValid ? c : '_');
+            }
 
             return sb.ToString();
         }

@@ -161,11 +161,33 @@ public interface IContextValidationAttribute
 
 /// <summary>
 /// 标记字段在整列中必须唯一，不能有重复值。
+/// 用于非主键字段的唯一约束。
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public class UniqueAttribute : Attribute, IContextValidationAttribute
 {
     public string ValidateContext(string fieldName, string value, Dictionary<string, HashSet<string>> cache)
+    {
+        return UniqueValidationUtility.ValidateUniqueValue(fieldName, value, cache, "[Unique]");
+    }
+}
+
+/// <summary>
+/// 显式标记导表主键字段。
+/// 主键默认要求整列唯一，同时用于增量 Diff 和旧数据基线对比。
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public class PrimaryKeyAttribute : Attribute, IContextValidationAttribute
+{
+    public string ValidateContext(string fieldName, string value, Dictionary<string, HashSet<string>> cache)
+    {
+        return UniqueValidationUtility.ValidateUniqueValue(fieldName, value, cache, "[PrimaryKey]");
+    }
+}
+
+internal static class UniqueValidationUtility
+{
+    public static string ValidateUniqueValue(string fieldName, string value, Dictionary<string, HashSet<string>> cache, string attributeName)
     {
         if (string.IsNullOrEmpty(value)) return null;
 
@@ -177,8 +199,9 @@ public class UniqueAttribute : Attribute, IContextValidationAttribute
 
         if (!set.Add(value))
         {
-            return $"该字段标记了 [Unique]，发现重复的值: {value}";
+            return $"该字段标记了 {attributeName}，发现重复的值: {value}";
         }
+
         return null;
     }
 }

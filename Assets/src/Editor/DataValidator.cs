@@ -181,51 +181,5 @@ namespace ExcelExtruder
             public FieldInfo Field;
             public List<IValidationAttribute> Validators;
         }
-
-        /// <summary>
-        /// Diff 校验缓存
-        /// key: Type -> FieldName -> DiffValidators
-        /// </summary>
-        private readonly Dictionary<Type, Dictionary<string, List<IDiffValidationAttribute>>> _diffCache
-            = new Dictionary<Type, Dictionary<string, List<IDiffValidationAttribute>>>();
-
-        /// <summary>
-        /// 执行差异校验（对比旧值和新值）
-        /// </summary>
-        public List<string> ValidateDiff(Type classType, string fieldName, string oldValue, string newValue)
-        {
-            if (!_diffCache.TryGetValue(classType, out var typeDiffCache))
-            {
-                typeDiffCache = new Dictionary<string, List<IDiffValidationAttribute>>();
-                var fields = classType.GetFields();
-                foreach (var field in fields)
-                {
-                    var validators = new List<IDiffValidationAttribute>();
-                    foreach (var attr in field.GetCustomAttributes(true))
-                    {
-                        if (attr is IDiffValidationAttribute diffAttr)
-                            validators.Add(diffAttr);
-                    }
-                    if (validators.Count > 0)
-                    {
-                        typeDiffCache[field.Name] = validators;
-                    }
-                }
-                _diffCache[classType] = typeDiffCache;
-            }
-
-            var errors = new List<string>();
-            if (typeDiffCache.TryGetValue(fieldName, out var fieldValidators))
-            {
-                foreach (var validator in fieldValidators)
-                {
-                    string error = validator.ValidateDiff(oldValue, newValue);
-                    if (error != null)
-                        errors.Add(error);
-                }
-            }
-
-            return errors;
-        }
     }
 }

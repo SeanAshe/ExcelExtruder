@@ -190,7 +190,12 @@ namespace ExcelExtruder
                 object genericList = TypeConvert.CreateGeneric(typeof(List<>), classType);
                 var list = (IList)genericList;
 
-                using var cdw = new StreamWriter(CSV_PATH + sheetName + ".csv", false);
+                // 1. 加载基线数据（旧 CSV）用于 Diff 校验
+                string csvFilePath = CSV_PATH + sheetName + ".csv";
+                var oldDataMap = LoadCsvData(csvFilePath, sheetName);
+                var newDataMap = new Dictionary<string, Dictionary<string, string>>();
+
+                using var cdw = new StreamWriter(csvFilePath, false);
                 int dataRowIndex = 0;
 
                 var allErrors = new List<ValidationError>();
@@ -240,8 +245,17 @@ namespace ExcelExtruder
                     var errors = m_validator.Validate(obj, classType, sheetName, dataRowIndex, rawValues);
                     allErrors.AddRange(errors);
 
+                    string pk = row.GetString(0);
+                    if (!string.IsNullOrEmpty(pk))
+                    {
+                        newDataMap[pk] = rawValues;
+                    }
+
                     list.Add(obj);
                 }
+
+                // 2. 循环结束后，执行后置的 Diff 差异校验
+                PerformDiffValidation(sheetName, classType, oldDataMap, newDataMap, allErrors);
 
                 // 统一输出所有校验错误
                 if (allErrors.Count > 0)
@@ -258,6 +272,106 @@ namespace ExcelExtruder
             } while(edr.NextResult());
 
             return new ExcelConvertResult { FileName = fileName, Sheets = sheets };
+        }
+
+        /// <summary>
+        /// 加载 CSV 文件为 Dictionary 映射
+        /// key: 主键 (第一列), value: <字段名, 字段值>
+        /// </summary>
+        private Dictionary<string, Dictionary<string, string>> LoadCsvData(string csvFilePath, string sheetName)
+        {
+            var dataMap = new Dictionary<string, Dictionary<string, string>>();
+            if (!File.Exists(csvFilePath)) return dataMap;
+
+            try
+            {
+                var csvOpts = new Sylvan.Data.Csv.CsvDataReaderOptions { HasHeaders = false };
+                using var csvReader = Sylvan.Data.Csv.CsvDataReader.Create(csvFilePath, csvOpts);
+                
+                var csvHeads = new List<string>();
+                while (csvReader.Read())
+                {
+                    if (csvReader.FieldCount == 0) continue;
+                    
+                    string firstCol = csvReader.GetString(0);
+                    if (firstCol == EXCEL_FIELDNAME)
+                    {
+                        for (int i = 0; i < csvReader.FieldCount; i++)
+                            csvHeads.Add(csvReader.GetString(i));
+                        continue;
+                    }
+                    
+                    if (firstCol == EXCEL_SKIP || string.IsNullOrEmpty(firstCol)) continue;
+                    
+                    if (csvHeads.Count > 0)
+                    {
+                        string pk = firstCol;
+                        var rowData = new Dictionary<string, string>();
+                        for (int i = 0; i < csvReader.FieldCount && i < csvHeads.Count; i++)
+                        {
+                            rowData[csvHeads[i]] = csvReader.GetString(i);
+                        }
+                        dataMap[pk] = rowData;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log($"加载基线数据 {sheetName}.csv 失败: {e.Message}");
+            }
+            return dataMap;
+        }
+
+        /// <summary>
+        /// 执行新老数据的 Diff 差异校验（支持插行、插列）
+        /// </summary>
+        private void PerformDiffValidation(
+            string sheetName, Type classType,
+            Dictionary<string, Dictionary<string, string>> oldDataMap,
+            Dictionary<string, Dictionary<string, string>> newDataMap,
+            List<ValidationError> allErrors)
+        {
+            if (oldDataMap.Count == 0 || newDataMap.Count == 0) return;
+
+            int rowIndex = 0; 
+            foreach (var newKvp in newDataMap)
+            {
+                rowIndex++;
+                string pk = newKvp.Key;
+                var newRow = newKvp.Value;
+
+                // 插行：旧数据中没有，视为新增行，安全跳过 Diff
+                if (!oldDataMap.TryGetValue(pk, out var oldRow)) continue;
+
+                // 发生更新：对比两行数据
+                foreach (var fieldKvp in newRow)
+                {
+                    string fieldName = fieldKvp.Key;
+                    string newValue = fieldKvp.Value;
+
+                    // 插列：旧数据中没有这个字段，视为新增列，安全跳过 Diff
+                    if (!oldRow.TryGetValue(fieldName, out string oldValue)) continue;
+
+                    if (oldValue != newValue)
+                    {
+                        var diffErrors = m_validator.ValidateDiff(classType, fieldName, oldValue, newValue);
+                        if (diffErrors != null)
+                        {
+                            foreach (var errorMsg in diffErrors)
+                            {
+                                allErrors.Add(new ValidationError
+                                {
+                                    SheetName = sheetName,
+                                    RowIndex = rowIndex,
+                                    FieldName = fieldName,
+                                    RawValue = newValue,
+                                    Message = $"[Diff变更] {errorMsg}"
+                                });
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         protected void Write2Csv(StreamWriter ws, DbDataReader row)
